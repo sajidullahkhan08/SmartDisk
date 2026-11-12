@@ -1,0 +1,18 @@
+# Rust / Cargo build artifacts (debug + release; can reach tens of GB)
+/target
+
+# Benchmark/test fixtures created on demand
+/.testdata
+
+# Inno Setup output leftovers
+installer/Output/
+
+# OS noise
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.rs.bk

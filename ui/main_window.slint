@@ -1,0 +1,3129 @@
+import { Theme } from "theme.slint";
+import {
+    DriveOption, TreeRow, ItemRow, CategoryRow, TopRow, ExtensionRow, TreemapCell,
+    CrumbRow, GroupRow, PlanRow, DuplicateRow, HistoryRow, ContextAction, EvidenceRow,
+} from "structs.slint";
+import {
+    ActionButton, SmallButton, NavItem, StatCard, SectionTitle, BarRow, EmptyState,
+    ToggleRow, FolderPath, PathInput,
+} from "components.slint";
+import { ItemTable, TreePanel } from "tables.slint";
+import { CheckBox, ComboBox, LineEdit, ListView, ScrollView, Spinner, TextEdit, Palette } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "SmartDisk — Disk Space Analyzer";
+    preferred-width: 1400px;
+    preferred-height: 880px;
+    min-width: 980px;
+    min-height: 640px;
+    background: Theme.bg;
+    default-font-family: "Segoe UI";
+    default-font-size: 14px;
+    forward-focus: key-root;
+
+    changed dark => {
+        Theme.dark = root.dark;
+        Palette.color-scheme = root.dark ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    init => {
+        Theme.dark = root.dark;
+        Palette.color-scheme = root.dark ? ColorScheme.dark : ColorScheme.light;
+        key-root.focus();
+    }
+
+    // A dialog can hold focus on its text field. When it is dismissed the
+    // focused element disappears, so hand keyboard focus back to the shell
+    // to keep F5 / Ctrl+F / Delete working without an extra click.
+    changed dialog-visible => {
+        if (!root.dialog-visible) {
+            key-root.focus();
+        }
+    }
+
+    // ---------------------------------------------------------------- theme
+    in-out property <bool> dark: true;
+
+    // ---------------------------------------------------------------- shell
+    in-out property <int> page: 0;
+    in-out property <bool> has-result: false;
+    in-out property <bool> scanning: false;
+    in-out property <bool> scan-paused: false;
+    in-out property <bool> show-info: true;
+    in-out property <bool> info-panel-open: false;
+
+    in-out property <string> scan-status: "Ready";
+    in-out property <string> scan-current: "";
+    in-out property <string> scan-files: "";
+    in-out property <string> scan-size: "";
+    in-out property <string> scan-elapsed: "";
+
+    in-out property <string> status-left: "Ready";
+    in-out property <string> status-middle: "";
+    in-out property <string> status-right: "SmartDisk 1.0.0";
+
+    // ---------------------------------------------------------------- header
+    in-out property <[string]> drive-labels;
+    in-out property <[DriveOption]> drives;
+    in-out property <int> drive-index: 0;
+    in-out property <string> path-text: "";
+    in-out property <bool> can-scan: true;
+    in-out property <string> search-query: "";
+    // Set by the Ctrl+F shortcut. The search field consumes it when it is
+    // created or already on screen, and hands focus back to keyboard input.
+    in-out property <bool> search-focus-request: false;
+
+    // ---------------------------------------------------------------- result
+    in-out property <string> result-title: "";
+    in-out property <string> result-path: "";
+    in-out property <string> result-meta: "";
+    in-out property <string> result-status: "";
+    in-out property <color> result-status-color: Theme.success;
+
+    in-out property <string> stat-size: "—";
+    in-out property <string> stat-allocated: "—";
+    in-out property <string> stat-files: "—";
+    in-out property <string> stat-dirs: "—";
+    in-out property <string> stat-errors: "—";
+    in-out property <string> stat-elapsed: "—";
+    in-out property <string> stat-average: "—";
+    in-out property <string> stat-categories: "—";
+
+    in-out property <bool> has-volume: false;
+    in-out property <string> volume-title: "";
+    in-out property <string> volume-detail: "";
+    in-out property <string> volume-free-text: "";
+    in-out property <float> volume-used-percent: 0.0;
+
+    in-out property <string> largest-file-name: "—";
+    in-out property <string> largest-file-size: "—";
+    in-out property <string> largest-file-path: "";
+    in-out property <string> largest-folder-name: "—";
+    in-out property <string> largest-folder-size: "—";
+    in-out property <string> largest-folder-path: "";
+
+    in-out property <[CategoryRow]> categories;
+    in-out property <[TopRow]> top-level;
+    in-out property <string> overview-summary: "";
+
+    // ---------------------------------------------------------------- explorer
+    in-out property <[TreeRow]> tree-rows;
+    in-out property <string> tree-summary: "";
+    in-out property <[ItemRow]> items;
+    in-out property <string> explorer-title: "";
+    in-out property <string> explorer-path: "";
+    in-out property <string> item-count-text: "";
+    in-out property <int> item-sort-column: 2;
+    in-out property <bool> item-sort-asc: false;
+
+    // ---------------------------------------------------------------- treemap
+    in-out property <[TreemapCell]> treemap-cells;
+    in-out property <[CrumbRow]> breadcrumbs;
+    in-out property <string> treemap-total: "";
+    in-out property <string> treemap-info: "";
+    in-out property <bool> treemap-empty: true;
+
+    // ---------------------------------------------------------------- largest
+    in-out property <[ItemRow]> largest-rows;
+    in-out property <string> largest-summary: "";
+    in-out property <int> largest-sort-column: 2;
+    in-out property <bool> largest-sort-asc: false;
+
+    // ---------------------------------------------------------------- file types
+    in-out property <[ExtensionRow]> extension-rows;
+    in-out property <string> file-types-summary: "";
+    in-out property <string> extension-summary: "";
+
+    // ---------------------------------------------------------------- search
+    in-out property <[string]> category-options;
+    in-out property <[string]> risk-options;
+    in-out property <[string]> kind-options;
+    in-out property <int> search-cat-index: 0;
+    in-out property <int> search-risk-index: 0;
+    in-out property <int> search-kind-index: 0;
+    in-out property <string> search-min-text: "";
+    in-out property <string> search-extension: "";
+    in-out property <[ItemRow]> search-rows;
+    in-out property <string> search-summary: "";
+    in-out property <int> search-sort-column: 2;
+    in-out property <bool> search-sort-asc: false;
+
+    // ---------------------------------------------------------------- cleanup
+    in-out property <[GroupRow]> cleanup-groups;
+    in-out property <string> cleanup-total: "0 B";
+    in-out property <string> cleanup-selected-size: "0 B";
+    in-out property <string> cleanup-summary: "No scan yet.";
+    in-out property <bool> cleanup-has-data: false;
+
+    // ---------------------------------------------------------------- plan
+    in-out property <bool> plan-visible: false;
+    in-out property <[PlanRow]> plan-rows;
+    in-out property <string> plan-total: "0 B";
+    in-out property <string> plan-summary: "";
+    in-out property <string> plan-warning: "";
+    in-out property <string> plan-count-text: "";
+    in-out property <bool> plan-recycle: true;
+    in-out property <string> plan-confirm-label: "Move to Recycle Bin";
+
+    // ---------------------------------------------------------------- duplicates
+    in-out property <bool> dup-busy: false;
+    in-out property <bool> dup-has-run: false;
+    in-out property <string> dup-stage: "";
+    in-out property <string> dup-progress: "";
+    in-out property <string> dup-summary: "";
+    in-out property <string> dup-total: "";
+    in-out property <float> dup-progress-percent: 0.0;
+    in-out property <[DuplicateRow]> dup-rows;
+
+    // ---------------------------------------------------------------- history
+    in-out property <[HistoryRow]> history-rows;
+    in-out property <bool> history-empty: true;
+
+    // ---------------------------------------------------------------- settings
+    in-out property <bool> settings-dark: true;
+    in-out property <bool> settings-low-resource: false;
+    in-out property <bool> settings-follow-reparse: false;
+    in-out property <bool> settings-use-recycle: true;
+    in-out property <bool> settings-confirm-destructive: true;
+    in-out property <bool> settings-remember-location: true;
+    in-out property <string> settings-workers-text: "0";
+    in-out property <string> settings-exclusions-text: "";
+    in-out property <string> settings-min-dup-text: "1";
+    in-out property <string> db-size: "—";
+    in-out property <string> db-path: "";
+    in-out property <string> app-version: "1.0.0";
+
+    // ---------------------------------------------------------------- info
+    in-out property <bool> info-visible: false;
+    in-out property <int> info-node: -1;
+    in-out property <string> info-name: "";
+    in-out property <string> info-path: "";
+    in-out property <string> info-kind: "";
+    in-out property <string> info-size: "";
+    in-out property <string> info-modified: "";
+    in-out property <string> info-category: "";
+    in-out property <color> info-category-color: Theme.text-2;
+    in-out property <string> info-confidence: "";
+    in-out property <string> info-risk: "";
+    in-out property <color> info-risk-color: Theme.text-2;
+    in-out property <string> info-summary: "";
+    in-out property <string> info-consequences: "";
+    in-out property <string> info-recommendation: "";
+    in-out property <string> info-missing: "";
+    in-out property <[EvidenceRow]> info-evidence;
+    in-out property <bool> info-actions-enabled: false;
+
+    // ---------------------------------------------------------------- context
+    in-out property <bool> context-visible: false;
+    in-out property <float> context-x: 0.0;
+    in-out property <float> context-y: 0.0;
+    in-out property <length> context-height: 200px;
+    in-out property <string> context-title: "";
+    in-out property <string> context-subtitle: "";
+    in-out property <[ContextAction]> context-actions;
+
+    // ---------------------------------------------------------------- dialog
+    in-out property <bool> dialog-visible: false;
+    in-out property <string> dialog-title: "";
+    in-out property <string> dialog-message: "";
+    in-out property <string> dialog-primary: "OK";
+    in-out property <string> dialog-secondary: "Cancel";
+    in-out property <bool> dialog-danger: false;
+    in-out property <bool> dialog-input: false;
+    in-out property <string> dialog-input-label: "";
+    in-out property <string> dialog-input-text: "";
+
+    // ---------------------------------------------------------------- toast
+    in-out property <bool> toast-visible: false;
+    in-out property <string> toast-text: "";
+    in-out property <bool> toast-error: false;
+
+    // ---------------------------------------------------------------- callbacks
+    callback drive-selected();
+    callback choose-folder();
+    callback scan-requested();
+    callback pause-requested();
+    callback cancel-requested();
+    callback nav(int);
+
+    callback tree-select(int, bool);
+    callback tree-activate(int);
+    callback tree-toggle(int);
+    callback tree-context(int, float, float);
+
+    callback item-select(int, bool);
+    callback item-activate(int);
+    callback item-context(int, float, float);
+
+    callback crumb-clicked(int);
+    callback go-up();
+    callback treemap-select(int, bool);
+    callback treemap-activate(int);
+    callback treemap-context(int, float, float);
+
+    callback filter-by-category(string);
+    callback top-level-clicked(int);
+    callback overview-open-largest(int, bool);
+
+    callback item-sort(int);
+    callback largest-sort(int);
+    callback search-sort(int);
+
+    callback search-run();
+    callback search-reset();
+
+    callback cleanup-toggle(string, bool);
+    callback cleanup-select-all();
+    callback cleanup-clear();
+    callback cleanup-preview();
+    callback cleanup-close-plan();
+    callback cleanup-confirm-plan();
+    callback plan-recycle-toggled(bool);
+
+    callback duplicates-scan();
+    callback duplicates-cancel();
+    callback dup-recycle(int, int);
+    callback dup-recycle-extras(int);
+    callback dup-reveal(int, int);
+
+    callback history-rescan(int);
+    callback history-clear();
+
+    callback settings-save();
+    callback open-data-folder();
+    callback clear-scan-data();
+
+    callback open-selected();
+    callback reveal-selected();
+    callback properties-selected();
+    callback copy-selected();
+    callback cut-selected();
+    callback paste-into-current();
+    callback rename-selected();
+    callback recycle-selected();
+    callback delete-selected();
+    callback info-close();
+
+    callback context-close();
+    callback context-action(int);
+    callback dialog-cancelled();
+    callback dialog-accepted(string);
+    callback toast-dismiss();
+    callback escape-pressed();
+    callback rescan-requested();
+
+    // ================================================================ shell
+    key-root := FocusScope {
+        width: 100%;
+        height: 100%;
+
+        VerticalLayout {
+            spacing: 0px;
+
+            // ---------------------------------------------------- header
+            Rectangle {
+                height: Theme.header-height;
+                background: Theme.panel;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                HorizontalLayout {
+                    padding-left: 18px;
+                    padding-right: 16px;
+                    padding-top: 14px;
+                    padding-bottom: 14px;
+                    spacing: 10px;
+
+                    Rectangle {
+                        width: 36px;
+                        height: 36px;
+                        border-radius: 10px;
+                        background: Theme.accent;
+
+                        Text {
+                            text: "S";
+                            color: #ffffff;
+                            font-size: 20px;
+                            font-weight: 800;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            width: parent.width;
+                            height: parent.height;
+                        }
+                    }
+
+                    VerticalLayout {
+                        width: 132px;
+                        spacing: 0px;
+                        alignment: center;
+
+                        Text {
+                            text: "SmartDisk";
+                            font-size: 16px;
+                            font-weight: 800;
+                            color: Theme.text;
+                        }
+                        Text {
+                            text: "Disk space analyzer";
+                            font-size: 12px;
+                            color: Theme.text-3;
+                        }
+                    }
+
+                    // Unified location bar: the drive picker and the path
+                    // field share one bordered container, so the address is
+                    // no longer shown in two separate boxes. The container
+                    // uses the std-widget palette so the embedded controls
+                    // blend into the bar in both themes.
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        height: 36px;
+                        border-radius: Theme.radius-sm;
+                        background: Palette.control-background;
+                        border-width: 1px;
+                        border-color: path-input.focused ? Theme.accent : Palette.border;
+
+                        HorizontalLayout {
+                            padding-left: 4px;
+                            padding-right: 8px;
+                            spacing: 4px;
+
+                            ComboBox {
+                                width: 76px;
+                                model: root.drive-labels;
+                                current-index <=> root.drive-index;
+                                changed current-index => { root.drive-selected(); }
+                            }
+
+                            path-input := PathInput {
+                                horizontal-stretch: 1;
+                                min-width: 160px;
+                                text <=> root.path-text;
+                                placeholder: "Type or browse a folder path";
+                                accepted(text) => {
+                                    root.path-text = text;
+                                    root.scan-requested();
+                                }
+                            }
+                        }
+                    }
+
+                    ActionButton {
+                        text: "Browse…";
+                        button-width: 88px;
+                        clicked => { root.choose-folder(); }
+                    }
+
+                    if !root.scanning: ActionButton {
+                        text: "Scan";
+                        primary: true;
+                        button-width: 84px;
+                        active: root.can-scan;
+                        clicked => { root.scan-requested(); }
+                    }
+
+                    if root.scanning: ActionButton {
+                        text: root.scan-paused ? "Resume" : "Pause";
+                        button-width: 84px;
+                        clicked => { root.pause-requested(); }
+                    }
+
+                    if root.scanning: ActionButton {
+                        text: "Cancel";
+                        danger: true;
+                        button-width: 78px;
+                        clicked => { root.cancel-requested(); }
+                    }
+
+                    if !root.scanning: SmallButton {
+                        glyph: "⟳";
+                        active: root.has-result;
+                        clicked => { root.rescan-requested(); }
+                    }
+
+                    SmallButton {
+                        glyph: "ⓘ";
+                        selected: root.show-info;
+                        clicked => { root.show-info = !root.show-info; root.info-panel-open = root.show-info; }
+                    }
+                }
+            }
+
+            // ---------------------------------------------------- body
+            HorizontalLayout {
+                spacing: 0px;
+                vertical-stretch: 1;
+                min-width: 0px;
+
+                // -------------------------------------------- sidebar
+                Rectangle {
+                    width: Theme.sidebar-width;
+                    background: Theme.panel;
+                    border-width: 1px;
+                    border-color: Theme.border;
+
+                    VerticalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        padding-top: 12px;
+                        padding-bottom: 12px;
+                        spacing: 2px;
+
+                        Text {
+                            text: "WORKSPACE";
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: Theme.text-3;
+                            letter-spacing: 1.2px;
+                            height: 20px;
+                            vertical-alignment: center;
+                        }
+
+                        NavItem {
+                            label: "Overview";
+                            glyph: "◈";
+                            selected: root.page == 0;
+                            clicked => { root.nav(0); }
+                        }
+                        NavItem {
+                            label: "Explorer";
+                            glyph: "▣";
+                            selected: root.page == 1;
+                            clicked => { root.nav(1); }
+                        }
+                        NavItem {
+                            label: "Treemap";
+                            glyph: "▦";
+                            selected: root.page == 2;
+                            clicked => { root.nav(2); }
+                        }
+                        NavItem {
+                            label: "Largest files";
+                            glyph: "▤";
+                            selected: root.page == 3;
+                            clicked => { root.nav(3); }
+                        }
+                        NavItem {
+                            label: "File types";
+                            glyph: "◧";
+                            selected: root.page == 4;
+                            clicked => { root.nav(4); }
+                        }
+
+                        Text {
+                            text: "TOOLS";
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: Theme.text-3;
+                            letter-spacing: 1.2px;
+                            height: 20px;
+                            vertical-alignment: center;
+                        }
+
+                        NavItem {
+                            label: "Cleanup";
+                            glyph: "✦";
+                            selected: root.page == 5;
+                            clicked => { root.nav(5); }
+                        }
+                        NavItem {
+                            label: "Duplicates";
+                            glyph: "⧉";
+                            selected: root.page == 6;
+                            clicked => { root.nav(6); }
+                        }
+                        NavItem {
+                            label: "Search";
+                            glyph: "⌕";
+                            selected: root.page == 7;
+                            clicked => { root.nav(7); }
+                        }
+                        NavItem {
+                            label: "History";
+                            glyph: "◷";
+                            selected: root.page == 8;
+                            clicked => { root.nav(8); }
+                        }
+                        NavItem {
+                            label: "Settings";
+                            glyph: "⚙";
+                            selected: root.page == 9;
+                            clicked => { root.nav(9); }
+                        }
+
+                        Rectangle { vertical-stretch: 1; background: transparent; }
+
+                        Rectangle {
+                            height: 1px;
+                            background: Theme.border;
+                        }
+
+                        if root.scanning: Rectangle {
+                            height: 66px;
+                            border-radius: Theme.radius-sm;
+                            background: Theme.panel-2;
+
+                            VerticalLayout {
+                                padding: 9px;
+                                spacing: 4px;
+                                Text {
+                                    text: root.scan-paused ? "Scan paused" : "Scanning…";
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                    color: Theme.text;
+                                }
+                                Text {
+                                    text: root.scan-files + "  ·  " + root.scan-size;
+                                    font-size: 12px;
+                                    color: Theme.text-3;
+                                    overflow: elide;
+                                }
+                                Text {
+                                    text: root.scan-current;
+                                    font-size: 11px;
+                                    color: Theme.text-3;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+
+                        if !root.scanning: VerticalLayout {
+                            spacing: 2px;
+                            Text {
+                                text: "Offline · no telemetry";
+                                font-size: 11px;
+                                color: Theme.text-3;
+                            }
+                            Text {
+                                text: "v" + root.app-version;
+                                font-size: 11px;
+                                color: Theme.text-3;
+                            }
+                        }
+                    }
+                }
+
+                // -------------------------------------------- content
+                Rectangle {
+                    horizontal-stretch: 1;
+                    vertical-stretch: 1;
+                    background: Theme.bg;
+
+                    VerticalLayout {
+                        spacing: 0px;
+
+                        HorizontalLayout {
+                            padding: 14px;
+                            spacing: 12px;
+                            vertical-stretch: 1;
+
+                            page-host := Rectangle {
+                                horizontal-stretch: 1;
+                                vertical-stretch: 1;
+                                clip: true;
+
+                                // scanning overlay
+                                if root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+                                    background: Theme.bg;
+                                    z: 5;
+
+                                    VerticalLayout {
+                                        alignment: center;
+                                        cross-axis-alignment: center;
+                                        spacing: 12px;
+                                        padding: 40px;
+
+                                        Spinner {
+                                            width: 52px;
+                                            height: 52px;
+                                            indeterminate: true;
+                                        }
+                                        Text {
+                                            text: root.scan-paused ? "Scan paused" : "Scanning " + root.result-title;
+                                            font-size: 19px;
+                                            font-weight: 700;
+                                            color: Theme.text;
+                                            horizontal-alignment: center;
+                                        }
+                                        Text {
+                                            text: root.scan-current;
+                                            font-size: 12px;
+                                            color: Theme.text-3;
+                                            horizontal-alignment: center;
+                                            width: min(parent.width, 620px);
+                                            overflow: elide;
+                                        }
+                                        HorizontalLayout {
+                                            spacing: 18px;
+                                            alignment: center;
+                                            Text {
+                                                text: root.scan-files;
+                                                font-size: 14px;
+                                                color: Theme.text-2;
+                                            }
+                                            Text {
+                                                text: root.scan-size;
+                                                font-size: 14px;
+                                                color: Theme.text-2;
+                                            }
+                                            Text {
+                                                text: root.scan-elapsed;
+                                                font-size: 14px;
+                                                color: Theme.text-2;
+                                            }
+                                        }
+                                        Rectangle { height: 6px; }
+                                        HorizontalLayout {
+                                            spacing: 10px;
+                                            alignment: center;
+                                            ActionButton {
+                                                text: root.scan-paused ? "Resume scan" : "Pause scan";
+                                                primary: true;
+                                                button-width: 130px;
+                                                clicked => { root.pause-requested(); }
+                                            }
+                                            ActionButton {
+                                                text: "Cancel scan";
+                                                danger: true;
+                                                button-width: 120px;
+                                                clicked => { root.cancel-requested(); }
+                                            }
+                                        }
+                                        Text {
+                                            text: root.scan-status;
+                                            font-size: 12px;
+                                            color: Theme.text-3;
+                                            horizontal-alignment: center;
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 0: overview
+                                if root.page == 0 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    if !root.has-result: EmptyState {
+                                        width: 100%;
+                                        height: 100%;
+                                        glyph: "◈";
+                                        title: "See where your disk space went";
+                                        message: "Choose a drive or folder and start a scan. SmartDisk reads metadata only: it does not open or upload your files. Everything stays on this computer.";
+                                        action-text: "Scan selected location";
+                                        action => { root.scan-requested(); }
+                                    }
+
+                                    if root.has-result: ScrollView {
+                                        width: 100%;
+                                        height: 100%;
+
+                                        VerticalLayout {
+                                            width: parent.width;
+                                            padding-left: 16px;
+                                            padding-right: 16px;
+                                            padding-top: 4px;
+                                            padding-bottom: 20px;
+                                            spacing: 12px;
+
+                                            HorizontalLayout {
+                                                spacing: 8px;
+                                                Text {
+                                                    text: root.result-title;
+                                                    horizontal-stretch: 1;
+                                                    font-size: 19px;
+                                                    font-weight: 800;
+                                                    color: Theme.text;
+                                                    vertical-alignment: center;
+                                                    overflow: elide;
+                                                }
+                                                Rectangle {
+                                                    height: 24px;
+                                                    border-radius: 12px;
+                                                    background: Theme.panel-2;
+                                                    width: 122px;
+                                                    HorizontalLayout {
+                                                        padding-left: 10px;
+                                                        padding-right: 10px;
+                                                        spacing: 6px;
+                                                        cross-axis-alignment: center;
+                                                        Rectangle {
+                                                            width: 7px;
+                                                            height: 7px;
+                                                            border-radius: 4px;
+                                                            background: root.result-status-color;
+                                                        }
+                                                        Text {
+                                                            text: root.result-status;
+                                                            font-size: 12px;
+                                                            font-weight: 600;
+                                                            color: root.result-status-color;
+                                                            vertical-alignment: center;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Text {
+                                                text: root.result-path;
+                                                font-size: 12px;
+                                                color: Theme.text-3;
+                                                overflow: elide;
+                                            }
+                                            Text {
+                                                text: root.overview-summary;
+                                                font-size: 12px;
+                                                color: Theme.text-2;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                StatCard {
+                                                    horizontal-stretch: 1;
+                                                    label: "TOTAL SIZE";
+                                                    value: root.stat-size;
+                                                    detail: "Logical bytes scanned";
+                                                    tone: Theme.accent;
+                                                }
+                                                StatCard {
+                                                    horizontal-stretch: 1;
+                                                    label: "ON DISK";
+                                                    value: root.stat-allocated;
+                                                    detail: "Allocation estimate";
+                                                    tone: #38bdf8;
+                                                }
+                                                StatCard {
+                                                    horizontal-stretch: 1;
+                                                    label: "FILES";
+                                                    value: root.stat-files;
+                                                    detail: "Average " + root.stat-average;
+                                                    tone: #22c55e;
+                                                }
+                                                StatCard {
+                                                    horizontal-stretch: 1;
+                                                    label: "FOLDERS";
+                                                    value: root.stat-dirs;
+                                                    detail: root.stat-categories + " categories";
+                                                    tone: #a78bfa;
+                                                }
+                                                StatCard {
+                                                    horizontal-stretch: 1;
+                                                    label: "SCAN TIME";
+                                                    value: root.stat-elapsed;
+                                                    detail: root.stat-errors + " access errors";
+                                                    tone: #f59e0b;
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                height: 74px;
+                                                border-radius: Theme.radius;
+                                                background: Theme.panel;
+                                                border-width: 1px;
+                                                border-color: Theme.border;
+
+                                                VerticalLayout {
+                                                    padding-left: 14px;
+                                                    padding-right: 14px;
+                                                    padding-top: 12px;
+                                                    padding-bottom: 12px;
+                                                    spacing: 6px;
+
+                                                    HorizontalLayout {
+                                                        spacing: 8px;
+                                                        Text {
+                                                            text: root.volume-title;
+                                                            horizontal-stretch: 1;
+                                                            font-size: 14px;
+                                                            font-weight: 700;
+                                                            color: Theme.text;
+                                                            overflow: elide;
+                                                        }
+                                                        Text {
+                                                            text: root.volume-free-text;
+                                                            font-size: 12px;
+                                                            color: Theme.text-2;
+                                                        }
+                                                    }
+                                                    Rectangle {
+                                                        height: 8px;
+                                                        border-radius: 4px;
+                                                        background: Theme.panel-3;
+                                                        Rectangle {
+                                                            width: max(2px, parent.width * root.volume-used-percent / 100.0);
+                                                            height: parent.height;
+                                                            x: 0px;
+                                                            border-radius: 4px;
+                                                            background: root.volume-used-percent > 88.0 ? Theme.danger : root.volume-used-percent > 72.0 ? Theme.warning : Theme.accent;
+                                                        }
+                                                    }
+                                                    Text {
+                                                        text: root.volume-detail;
+                                                        font-size: 12px;
+                                                        color: Theme.text-3;
+                                                        overflow: elide;
+                                                    }
+                                                }
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: 12px;
+
+                                                Rectangle {
+                                                    horizontal-stretch: 3;
+                                                    border-radius: Theme.radius;
+                                                    background: Theme.panel;
+                                                    border-width: 1px;
+                                                    border-color: Theme.border;
+
+                                                    VerticalLayout {
+                                                        padding-left: 14px;
+                                                        padding-right: 14px;
+                                                        padding-top: 12px;
+                                                        padding-bottom: 12px;
+                                                        spacing: 2px;
+
+                                                        SectionTitle {
+                                                            title: "Space by category";
+                                                            subtitle: "Purpose inferred from path, extension and context. Click to search a category.";
+                                                        }
+                                                        for cat in root.categories: BarRow {
+                                                            name: cat.name;
+                                                            value: cat.size;
+                                                            percent: cat.percent;
+                                                            bar-color: cat.color;
+                                                            clicked => { root.filter-by-category(cat.key); }
+                                                        }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    horizontal-stretch: 2;
+                                                    border-radius: Theme.radius;
+                                                    background: Theme.panel;
+                                                    border-width: 1px;
+                                                    border-color: Theme.border;
+
+                                                    VerticalLayout {
+                                                        padding-left: 14px;
+                                                        padding-right: 14px;
+                                                        padding-top: 12px;
+                                                        padding-bottom: 12px;
+                                                        spacing: 2px;
+
+                                                        SectionTitle {
+                                                            title: "Top-level folders";
+                                                            subtitle: "Direct children of the scanned location.";
+                                                        }
+                                                        for top in root.top-level: BarRow {
+                                                            name: top.name;
+                                                            value: top.size;
+                                                            percent: top.percent;
+                                                            bar-color: top.color;
+                                                            clicked => { root.top-level-clicked(top.id); }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: 12px;
+
+                                                Rectangle {
+                                                    horizontal-stretch: 1;
+                                                    height: 92px;
+                                                    border-radius: Theme.radius;
+                                                    background: Theme.panel;
+                                                    border-width: 1px;
+                                                    border-color: Theme.border;
+
+                                                    VerticalLayout {
+                                                        padding-left: 14px;
+                                                        padding-right: 14px;
+                                                        padding-top: 12px;
+                                                        padding-bottom: 12px;
+                                                        spacing: 3px;
+                                                        Text {
+                                                            text: "LARGEST FILE";
+                                                            font-size: 11px;
+                                                            font-weight: 700;
+                                                            color: Theme.text-3;
+                                                            letter-spacing: 1px;
+                                                        }
+                                                        Text {
+                                                            text: root.largest-file-name;
+                                                            font-size: 14px;
+                                                            font-weight: 700;
+                                                            color: Theme.text;
+                                                            overflow: elide;
+                                                        }
+                                                        Text {
+                                                            text: root.largest-file-path;
+                                                            font-size: 12px;
+                                                            color: Theme.text-3;
+                                                            overflow: elide;
+                                                        }
+                                                        HorizontalLayout {
+                                                            spacing: 8px;
+                                                            Text {
+                                                                text: root.largest-file-size;
+                                                                horizontal-stretch: 1;
+                                                                font-size: 13px;
+                                                                font-weight: 600;
+                                                                color: Theme.accent;
+                                                                vertical-alignment: center;
+                                                            }
+                                                            ActionButton {
+                                                                text: "Show";
+                                                                button-width: 64px;
+                                                                clicked => { root.overview-open-largest(root.largest-rows.length > 0 ? 0 : -1, false); }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    horizontal-stretch: 1;
+                                                    height: 92px;
+                                                    border-radius: Theme.radius;
+                                                    background: Theme.panel;
+                                                    border-width: 1px;
+                                                    border-color: Theme.border;
+
+                                                    VerticalLayout {
+                                                        padding-left: 14px;
+                                                        padding-right: 14px;
+                                                        padding-top: 12px;
+                                                        padding-bottom: 12px;
+                                                        spacing: 3px;
+                                                        Text {
+                                                            text: "LARGEST FOLDER";
+                                                            font-size: 11px;
+                                                            font-weight: 700;
+                                                            color: Theme.text-3;
+                                                            letter-spacing: 1px;
+                                                        }
+                                                        Text {
+                                                            text: root.largest-folder-name;
+                                                            font-size: 14px;
+                                                            font-weight: 700;
+                                                            color: Theme.text;
+                                                            overflow: elide;
+                                                        }
+                                                        Text {
+                                                            text: root.largest-folder-path;
+                                                            font-size: 12px;
+                                                            color: Theme.text-3;
+                                                            overflow: elide;
+                                                        }
+                                                        Text {
+                                                            text: root.largest-folder-size;
+                                                            font-size: 13px;
+                                                            font-weight: 600;
+                                                            color: Theme.accent;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 1: explorer
+                                if root.page == 1 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    if !root.has-result: EmptyState {
+                                        width: 100%;
+                                        height: 100%;
+                                        glyph: "▣";
+                                        title: "No scan results yet";
+                                        message: "Start a scan to browse the folder tree and inspect file details.";
+                                        action-text: "Start a scan";
+                                        action => { root.scan-requested(); }
+                                    }
+
+                                    if root.has-result: VerticalLayout {
+                                        spacing: 10px;
+                                        padding: 0px;
+
+                                        HorizontalLayout {
+                                            spacing: 8px;
+
+                                            SmallButton {
+                                                glyph: "↑";
+                                                active: root.breadcrumbs.length > 1;
+                                                clicked => { root.go-up(); }
+                                            }
+
+                                            Text {
+                                                text: root.explorer-path;
+                                                horizontal-stretch: 1;
+                                                font-size: 13px;
+                                                color: Theme.text-2;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+
+                                            ActionButton {
+                                                text: "Reveal in Explorer";
+                                                button-width: 130px;
+                                                active: root.info-visible;
+                                                clicked => { root.reveal-selected(); }
+                                            }
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 10px;
+                                            vertical-stretch: 1;
+
+                                            TreePanel {
+                                                width: 322px;
+                                                vertical-stretch: 1;
+                                                rows: root.tree-rows;
+                                                summary: root.tree-summary;
+                                                select(id, additive) => { root.tree-select(id, additive); }
+                                                activate(id) => { root.tree-activate(id); }
+                                                toggle(id) => { root.tree-toggle(id); }
+                                                context(id, x, y) => { root.tree-context(id, x, y); }
+                                            }
+
+                                            Rectangle {
+                                                horizontal-stretch: 1;
+                                                vertical-stretch: 1;
+                                                border-radius: Theme.radius;
+                                                background: Theme.panel;
+                                                border-width: 1px;
+                                                border-color: Theme.border;
+                                                clip: true;
+
+                                                VerticalLayout {
+                                                    spacing: 0px;
+
+                                                    Rectangle {
+                                                        height: 46px;
+                                                        background: Theme.panel-2;
+
+                                                        HorizontalLayout {
+                                                            padding-left: 12px;
+                                                            padding-right: 12px;
+                                                            spacing: 8px;
+
+                                                            VerticalLayout {
+                                                                vertical-stretch: 1;
+                                                                alignment: center;
+                                                                spacing: 1px;
+                                                                Text {
+                                                                    text: root.explorer-title;
+                                                                    font-size: 14px;
+                                                                    font-weight: 700;
+                                                                    color: Theme.text;
+                                                                    overflow: elide;
+                                                                }
+                                                                Text {
+                                                                    text: root.item-count-text;
+                                                                    font-size: 12px;
+                                                                    color: Theme.text-3;
+                                                                    overflow: elide;
+                                                                }
+                                                            }
+
+                                                            SmallButton {
+                                                                glyph: "⧉";
+                                                                active: root.info-visible;
+                                                                clicked => { root.copy-selected(); }
+                                                            }
+                                                            SmallButton {
+                                                                glyph: "✎";
+                                                                active: root.info-visible;
+                                                                clicked => { root.rename-selected(); }
+                                                            }
+                                                            SmallButton {
+                                                                glyph: "⌫";
+                                                                active: root.info-visible;
+                                                                clicked => { root.recycle-selected(); }
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Rectangle { height: 1px; background: Theme.border; }
+
+                                                    ItemTable {
+                                                        vertical-stretch: 1;
+                                                        rows: root.items;
+                                                        compact: true;
+                                                        sort-column: root.item-sort-column;
+                                                        sort-asc: root.item-sort-asc;
+                                                        empty-text: "This folder is empty.";
+                                                        select(id, additive) => { root.item-select(id, additive); }
+                                                        activate(id) => { root.item-activate(id); }
+                                                        context(id, x, y) => { root.item-context(id, x, y); }
+                                                        sort(col) => { root.item-sort(col); }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 2: treemap
+                                if root.page == 2 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    if !root.has-result: EmptyState {
+                                        width: 100%;
+                                        height: 100%;
+                                        glyph: "▦";
+                                        title: "Treemap needs a scan";
+                                        message: "The treemap shows relative sizes of the items in a folder. Double-click a folder cell to zoom in, or use the breadcrumb to go back.";
+                                        action-text: "Start a scan";
+                                        action => { root.scan-requested(); }
+                                    }
+
+                                    if root.has-result: VerticalLayout {
+                                        spacing: 8px;
+
+                                        HorizontalLayout {
+                                            spacing: 6px;
+                                            padding: 0px;
+
+                                            SmallButton {
+                                                glyph: "↑";
+                                                active: root.breadcrumbs.length > 1;
+                                                clicked => { root.go-up(); }
+                                            }
+
+                                            ScrollView {
+                                                horizontal-stretch: 1;
+                                                height: 30px;
+                                                vertical-scrollbar-policy: always-off;
+                                                horizontal-scrollbar-policy: as-needed;
+
+                                                HorizontalLayout {
+                                                    spacing: 4px;
+                                                    for crumb in root.breadcrumbs: ActionButton {
+                                                        text: crumb.name;
+                                                        button-width: 180px;
+                                                        clicked => { root.crumb-clicked(crumb.id); }
+                                                    }
+                                                }
+                                            }
+
+                                            Text {
+                                                text: root.treemap-total;
+                                                width: 120px;
+                                                font-size: 12px;
+                                                font-weight: 600;
+                                                color: Theme.text-2;
+                                                horizontal-alignment: right;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            vertical-stretch: 1;
+                                            border-radius: Theme.radius;
+                                            background: Theme.panel-2;
+                                            border-width: 1px;
+                                            border-color: Theme.border;
+                                            clip: true;
+
+                                            if root.treemap-empty: Text {
+                                                text: "There are no items with a size to display here.";
+                                                font-size: 13px;
+                                                color: Theme.text-3;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                                width: 100%;
+                                                height: 100%;
+                                            }
+
+                                            treemap-canvas := Rectangle {
+                                                width: 100%;
+                                                height: 100%;
+                                                background: transparent;
+
+                                                for cell in root.treemap-cells: Rectangle {
+                                                    x: cell.x * treemap-canvas.width;
+                                                    y: cell.y * treemap-canvas.height;
+                                                    width: max(0px, cell.w * treemap-canvas.width - 1px);
+                                                    height: max(0px, cell.h * treemap-canvas.height - 1px);
+                                                    background: cell.selected ? cell.color : cell.color;
+                                                    border-radius: 3px;
+                                                    border-width: cell.selected ? 2px : 1px;
+                                                    border-color: cell.selected ? #ffffff : Theme.bg;
+                                                    clip: true;
+
+                                                    Rectangle {
+                                                        x: 0px;
+                                                        y: 0px;
+                                                        width: parent.width;
+                                                        height: parent.height;
+                                                        background: #ffffff;
+                                                        opacity: cell-ta.has-hover ? 0.12 : 0.0;
+                                                    }
+
+                                                    Text {
+                                                        x: 5px;
+                                                        y: 3px;
+                                                        width: parent.width - 10px;
+                                                        height: 16px;
+                                                        text: cell.name;
+                                                        font-size: 12px;
+                                                        font-weight: 600;
+                                                        color: #ffffff;
+                                                        overflow: elide;
+                                                        visible: cell.w * treemap-canvas.width > 74px && cell.h * treemap-canvas.height > 24px;
+                                                    }
+                                                    Text {
+                                                        x: 5px;
+                                                        y: 18px;
+                                                        width: parent.width - 10px;
+                                                        height: 14px;
+                                                        text: cell.size;
+                                                        font-size: 11px;
+                                                        color: #ffffffd0;
+                                                        overflow: elide;
+                                                        visible: cell.w * treemap-canvas.width > 74px && cell.h * treemap-canvas.height > 44px;
+                                                    }
+
+                                                    cell-ta := TouchArea {
+                                                        mouse-cursor: pointer;
+                                                        double-clicked => { root.treemap-activate(cell.id); }
+                                                        pointer-event(ev) => {
+                                                            if (ev.kind == PointerEventKind.up && ev.button == PointerEventButton.left) {
+                                                                root.treemap-select(cell.id, ev.modifiers.control);
+                                                            } else if (ev.kind == PointerEventKind.up && ev.button == PointerEventButton.right) {
+                                                                root.treemap-context(cell.id, (cell-ta.absolute-position.x + cell-ta.mouse-x) / 1px, (cell-ta.absolute-position.y + cell-ta.mouse-y) / 1px);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            text: root.treemap-info;
+                                            font-size: 12px;
+                                            color: Theme.text-3;
+                                            wrap: word-wrap;
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 3: largest files
+                                if root.page == 3 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    if !root.has-result: EmptyState {
+                                        width: 100%;
+                                        height: 100%;
+                                        glyph: "▼";
+                                        title: "Largest files";
+                                        message: "After a scan, this page lists the biggest files so you can decide what deserves attention.";
+                                        action-text: "Start a scan";
+                                        action => { root.scan-requested(); }
+                                    }
+
+                                    if root.has-result: VerticalLayout {
+                                        VerticalLayout {
+                                            spacing: 2px;
+                                            padding-bottom: 10px;
+                                            Text {
+                                                text: "Largest files";
+                                                font-size: 19px;
+                                                font-weight: 800;
+                                                color: Theme.text;
+                                            }
+                                            Text {
+                                                text: root.largest-summary;
+                                                font-size: 12px;
+                                                color: Theme.text-3;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+
+                                        ItemTable {
+                                            vertical-stretch: 1;
+                                            rows: root.largest-rows;
+                                            compact: false;
+                                            sort-column: root.largest-sort-column;
+                                            sort-asc: root.largest-sort-asc;
+                                            empty-text: "No files in this scan.";
+                                            select(id, additive) => { root.item-select(id, additive); }
+                                            activate(id) => { root.item-activate(id); }
+                                            context(id, x, y) => { root.item-context(id, x, y); }
+                                            sort(col) => { root.largest-sort(col); }
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 4: file types
+                                if root.page == 4 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    if !root.has-result: EmptyState {
+                                        width: 100%;
+                                        height: 100%;
+                                        glyph: "◧";
+                                        title: "File type distribution";
+                                        message: "See which kinds of files consume space, grouped by purpose and by extension.";
+                                        action-text: "Start a scan";
+                                        action => { root.scan-requested(); }
+                                    }
+
+                                    if root.has-result: ScrollView {
+                                        width: 100%;
+                                        height: 100%;
+
+                                        VerticalLayout {
+                                            width: parent.width;
+                                            alignment: start;
+                                            padding-left: 16px;
+                                            padding-right: 16px;
+                                            padding-top: 0px;
+                                            padding-bottom: 20px;
+                                            spacing: 12px;
+
+                                            VerticalLayout {
+                                                spacing: 2px;
+                                                Text {
+                                                    text: "File types";
+                                                    font-size: 19px;
+                                                    font-weight: 800;
+                                                    color: Theme.text;
+                                                }
+                                                Text {
+                                                    text: root.file-types-summary;
+                                                    font-size: 12px;
+                                                    color: Theme.text-3;
+                                                    wrap: word-wrap;
+                                                }
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: 12px;
+
+                                                Rectangle {
+                                                    horizontal-stretch: 1;
+                                                    border-radius: Theme.radius;
+                                                    background: Theme.panel;
+                                                    border-width: 1px;
+                                                    border-color: Theme.border;
+
+                                                    VerticalLayout {
+                                                        padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                        spacing: 2px;
+                                                        SectionTitle {
+                                                            title: "By purpose";
+                                                            subtitle: "Click a category to filter the search page.";
+                                                        }
+                                                        for cat in root.categories: BarRow {
+                                                            name: cat.name + "  ·  " + cat.count;
+                                                            value: cat.size;
+                                                            percent: cat.percent;
+                                                            bar-color: cat.color;
+                                                            clicked => { root.filter-by-category(cat.key); }
+                                                        }
+                                                    }
+                                                }
+
+                                                Rectangle {
+                                                    horizontal-stretch: 1;
+                                                    border-radius: Theme.radius;
+                                                    background: Theme.panel;
+                                                    border-width: 1px;
+                                                    border-color: Theme.border;
+
+                                                    VerticalLayout {
+                                                        padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                        spacing: 0px;
+                                                        SectionTitle {
+                                                            title: "By extension";
+                                                            subtitle: root.extension-summary;
+                                                        }
+                                                        Rectangle { height: 5px; background: transparent; }
+                                                        HorizontalLayout {
+                                                            spacing: 0px;
+                                                            Text { text: "Extension"; horizontal-stretch: 1; font-size: 12px; font-weight: 600; color: Theme.text-3; }
+                                                            Text { text: "Files"; width: 70px; font-size: 12px; font-weight: 600; color: Theme.text-3; horizontal-alignment: right; }
+                                                            Text { text: "Size"; width: 92px; font-size: 12px; font-weight: 600; color: Theme.text-3; horizontal-alignment: right; }
+                                                        }
+                                                        Rectangle { height: 1px; background: Theme.border; }
+                                                        for ext in root.extension-rows: Rectangle {
+                                                            height: 24px;
+                                                            HorizontalLayout {
+                                                                spacing: 0px;
+                                                                Text { text: ext.extension; horizontal-stretch: 1; font-size: 12px; color: Theme.text; vertical-alignment: center; overflow: elide; }
+                                                                Text { text: ext.count; width: 70px; font-size: 12px; color: Theme.text-3; horizontal-alignment: right; vertical-alignment: center; }
+                                                                Text { text: ext.size; width: 92px; font-size: 12px; color: Theme.text-2; horizontal-alignment: right; vertical-alignment: center; }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 5: cleanup
+                                if root.page == 5 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    if !root.has-result: EmptyState {
+                                        width: 100%;
+                                        height: 100%;
+                                        glyph: "✦";
+                                        title: "Cleanup assistant";
+                                        message: "After a scan, SmartDisk suggests temporary files, caches, logs and update downloads that can usually be recreated. Nothing is deleted automatically.";
+                                        action-text: "Start a scan";
+                                        action => { root.scan-requested(); }
+                                    }
+
+                                    if root.has-result: VerticalLayout {
+                                        spacing: 10px;
+
+                                        VerticalLayout {
+                                            spacing: 2px;
+                                            Text {
+                                                text: "Cleanup recommendations";
+                                                font-size: 19px;
+                                                font-weight: 800;
+                                                color: Theme.text;
+                                            }
+                                            Text {
+                                                text: "Only files inside recognized cleanup locations are suggested. Protected system locations and unknown items are never included. Review the preview before anything is moved.";
+                                                font-size: 12px;
+                                                color: Theme.text-3;
+                                                wrap: word-wrap;
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            height: 74px;
+                                            border-radius: Theme.radius;
+                                            background: Theme.panel;
+                                            border-width: 1px;
+                                            border-color: Theme.border;
+
+                                            HorizontalLayout {
+                                                padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                spacing: 12px;
+
+                                                VerticalLayout {
+                                                    horizontal-stretch: 1;
+                                                    alignment: center;
+                                                    spacing: 1px;
+                                                    Text {
+                                                        text: "RECOMMENDED";
+                                                        font-size: 11px;
+                                                        font-weight: 700;
+                                                        color: Theme.text-3;
+                                                        letter-spacing: 1px;
+                                                    }
+                                                    Text {
+                                                        text: root.cleanup-total;
+                                                        font-size: 22px;
+                                                        font-weight: 800;
+                                                        color: Theme.success;
+                                                    }
+                                                    Text {
+                                                        text: root.cleanup-summary;
+                                                        font-size: 12px;
+                                                        color: Theme.text-3;
+                                                        overflow: elide;
+                                                    }
+                                                }
+
+                                                VerticalLayout {
+                                                    width: 190px;
+                                                    alignment: center;
+                                                    spacing: 1px;
+                                                    Text {
+                                                        text: "SELECTED";
+                                                        font-size: 11px;
+                                                        font-weight: 700;
+                                                        color: Theme.text-3;
+                                                        letter-spacing: 1px;
+                                                    }
+                                                    Text {
+                                                        text: root.cleanup-selected-size;
+                                                        font-size: 22px;
+                                                        font-weight: 800;
+                                                        color: Theme.accent;
+                                                    }
+                                                    Text {
+                                                        text: "Reviewing the preview is always required";
+                                                        font-size: 11px;
+                                                        color: Theme.text-3;
+                                                        overflow: elide;
+                                                    }
+                                                }
+
+                                                VerticalLayout {
+                                                    width: 340px;
+                                                    alignment: center;
+                                                    spacing: 6px;
+                                                    HorizontalLayout {
+                                                        spacing: 6px;
+                                                        ActionButton {
+                                                            text: "Select suggested";
+                                                            button-width: 126px;
+                                                            clicked => { root.cleanup-select-all(); }
+                                                        }
+                                                        ActionButton {
+                                                            text: "Clear";
+                                                            button-width: 70px;
+                                                            clicked => { root.cleanup-clear(); }
+                                                        }
+                                                        ActionButton {
+                                                            text: "Preview…";
+                                                            primary: true;
+                                                            button-width: 112px;
+                                                            active: root.cleanup-has-data;
+                                                            clicked => { root.cleanup-preview(); }
+                                                        }
+                                                    }
+                                                    Text {
+                                                        text: "Suggested items have lower or review-level risk only.";
+                                                        font-size: 11px;
+                                                        color: Theme.text-3;
+                                                        horizontal-alignment: center;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if !root.cleanup-has-data: EmptyState {
+                                            horizontal-stretch: 1;
+                                            vertical-stretch: 1;
+                                            glyph: "✓";
+                                            title: "Nothing to suggest";
+                                            message: "No recognized temporary, cache, log, update or Recycle Bin files were found at reviewable risk levels.";
+                                        }
+
+                                        if root.cleanup-has-data: ScrollView {
+                                            vertical-stretch: 1;
+                                            VerticalLayout {
+                                                width: parent.width;
+                                                spacing: 8px;
+                                                padding-right: 4px;
+
+                                                for group in root.cleanup-groups: Rectangle {
+                                                    height: 82px;
+                                                    border-radius: Theme.radius;
+                                                    background: Theme.panel;
+                                                    border-width: 1px;
+                                                    border-color: group.selected ? Theme.accent : Theme.border;
+
+                                                    HorizontalLayout {
+                                                        padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                        spacing: 12px;
+                                                        cross-axis-alignment: center;
+
+                                                        CheckBox {
+                                                            checked: group.selected;
+                                                            toggled => { root.cleanup-toggle(group.key, self.checked); }
+                                                        }
+
+                                                        Rectangle {
+                                                            width: 4px;
+                                                            height: 48px;
+                                                            border-radius: 2px;
+                                                            background: group.color;
+                                                        }
+
+                                                        VerticalLayout {
+                                                            horizontal-stretch: 1;
+                                                            alignment: center;
+                                                            spacing: 3px;
+                                                            Text {
+                                                                text: group.title;
+                                                                font-size: 14px;
+                                                                font-weight: 700;
+                                                                color: Theme.text;
+                                                            }
+                                                            Text {
+                                                                text: group.description;
+                                                                font-size: 12px;
+                                                                color: Theme.text-3;
+                                                                wrap: word-wrap;
+                                                            }
+                                                        }
+
+                                                        VerticalLayout {
+                                                            width: 130px;
+                                                            alignment: center;
+                                                            spacing: 2px;
+                                                            Text {
+                                                                text: group.size;
+                                                                font-size: 17px;
+                                                                font-weight: 700;
+                                                                color: Theme.text;
+                                                                horizontal-alignment: right;
+                                                            }
+                                                            Text {
+                                                                text: group.count;
+                                                                font-size: 12px;
+                                                                color: Theme.text-3;
+                                                                horizontal-alignment: right;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 6: duplicates
+                                if root.page == 6 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    if !root.has-result: EmptyState {
+                                        width: 100%;
+                                        height: 100%;
+                                        glyph: "⧉";
+                                        title: "Duplicate finder";
+                                        message: "Duplicate detection hashes candidate files with SHA-256 only after a scan. Files that share a hard link are recognized and counted once.";
+                                        action-text: "Start a scan";
+                                        action => { root.scan-requested(); }
+                                    }
+
+                                    if root.has-result: VerticalLayout {
+                                        spacing: 10px;
+
+                                        HorizontalLayout {
+                                            spacing: 10px;
+                                            VerticalLayout {
+                                                horizontal-stretch: 1;
+                                                spacing: 2px;
+                                                Text {
+                                                    text: "Duplicate files";
+                                                    font-size: 19px;
+                                                    font-weight: 800;
+                                                    color: Theme.text;
+                                                }
+                                                Text {
+                                                    text: "Content hashing is optional and runs locally. It reads file contents for candidates with identical sizes. Files smaller than " + root.settings-min-dup-text + " MB are ignored.";
+                                                    font-size: 12px;
+                                                    color: Theme.text-3;
+                                                    wrap: word-wrap;
+                                                }
+                                            }
+                                            ActionButton {
+                                                text: "Find duplicates";
+                                                primary: true;
+                                                button-width: 130px;
+                                                active: !root.dup-busy;
+                                                clicked => { root.duplicates-scan(); }
+                                            }
+                                            if root.dup-busy: ActionButton {
+                                                text: "Cancel";
+                                                danger: true;
+                                                button-width: 84px;
+                                                clicked => { root.duplicates-cancel(); }
+                                            }
+                                        }
+
+                                        if root.dup-busy: Rectangle {
+                                            height: 54px;
+                                            border-radius: Theme.radius;
+                                            background: Theme.panel;
+                                            border-width: 1px;
+                                            border-color: Theme.border;
+
+                                            VerticalLayout {
+                                                padding-left: 12px;
+                                                padding-right: 12px;
+                                                padding-top: 9px;
+                                                padding-bottom: 9px;
+                                                spacing: 5px;
+                                                HorizontalLayout {
+                                                    spacing: 8px;
+                                                    Text {
+                                                        text: root.dup-stage;
+                                                        horizontal-stretch: 1;
+                                                        font-size: 12px;
+                                                        font-weight: 600;
+                                                        color: Theme.text;
+                                                    }
+                                                    Text {
+                                                        text: root.dup-progress;
+                                                        font-size: 12px;
+                                                        color: Theme.text-3;
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    height: 5px;
+                                                    border-radius: 2.5px;
+                                                    background: Theme.panel-3;
+                                                    Rectangle {
+                                                        width: max(2px, parent.width * root.dup-progress-percent / 100.0);
+                                                        height: parent.height;
+                                                        x: 0px;
+                                                        border-radius: 2.5px;
+                                                        background: Theme.accent;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if root.dup-has-run && !root.dup-busy: Text {
+                                            text: root.dup-summary + "   " + root.dup-total;
+                                            font-size: 12px;
+                                            color: Theme.text-2;
+                                        }
+
+                                        if !root.dup-has-run && !root.dup-busy: EmptyState {
+                                            horizontal-stretch: 1;
+                                            vertical-stretch: 1;
+                                            glyph: "⧉";
+                                            title: "No duplicate scan has run";
+                                            message: "Start a duplicate scan to group identical files. SmartDisk never deletes automatically; each suggestion must be confirmed.";
+                                        }
+
+                                        if root.dup-has-run && !root.dup-busy && root.dup-rows.length == 0: EmptyState {
+                                            horizontal-stretch: 1;
+                                            vertical-stretch: 1;
+                                            glyph: "✓";
+                                            title: "No duplicates found";
+                                            message: "No identical files above the configured minimum size were found in this scan.";
+                                        }
+
+                                        if root.dup-rows.length > 0: Rectangle {
+                                            vertical-stretch: 1;
+                                            border-radius: Theme.radius;
+                                            background: Theme.panel;
+                                            border-width: 1px;
+                                            border-color: Theme.border;
+                                            clip: true;
+
+                                            ListView {
+                                                for row[i] in root.dup-rows: Rectangle {
+                                                    width: 100%;
+                                                    height: row.is-header ? 40px : 42px;
+                                                    background: row.is-header ? Theme.panel-2
+                                                        : Math.mod(i, 2) == 0 ? transparent
+                                                        : (Theme.dark ? #0d1626 : #fafcff);
+
+                                                    if row.is-header: HorizontalLayout {
+                                                        padding-left: 14px;
+                                                        padding-right: 12px;
+                                                        spacing: 10px;
+                                                        Text {
+                                                            text: row.name;
+                                                            horizontal-stretch: 1;
+                                                            font-size: 13px;
+                                                            font-weight: 700;
+                                                            color: Theme.text;
+                                                            vertical-alignment: center;
+                                                            overflow: elide;
+                                                        }
+                                                        Text {
+                                                            text: row.path;
+                                                            width: 210px;
+                                                            font-size: 12px;
+                                                            color: Theme.text-3;
+                                                            vertical-alignment: center;
+                                                            overflow: elide;
+                                                        }
+                                                        Text {
+                                                            text: row.size;
+                                                            width: 140px;
+                                                            font-size: 12px;
+                                                            font-weight: 600;
+                                                            color: Theme.success;
+                                                            horizontal-alignment: right;
+                                                            vertical-alignment: center;
+                                                            overflow: elide;
+                                                        }
+                                                        ActionButton {
+                                                            text: "Recycle extras";
+                                                            danger: true;
+                                                            button-width: 112px;
+                                                            active: row.can-recycle;
+                                                            clicked => { root.dup-recycle-extras(row.group); }
+                                                        }
+                                                    }
+
+                                                    if !row.is-header: HorizontalLayout {
+                                                        padding-left: 30px;
+                                                        padding-right: 12px;
+                                                        spacing: 8px;
+                                                        Text {
+                                                            text: "•";
+                                                            width: 12px;
+                                                            color: Theme.text-3;
+                                                            vertical-alignment: center;
+                                                        }
+                                                        VerticalLayout {
+                                                            horizontal-stretch: 1;
+                                                            alignment: center;
+                                                            spacing: 0px;
+                                                            Text {
+                                                                text: row.name;
+                                                                font-size: 13px;
+                                                                color: Theme.text;
+                                                                overflow: elide;
+                                                            }
+                                                            Text {
+                                                                text: row.path;
+                                                                font-size: 11px;
+                                                                color: Theme.text-3;
+                                                                overflow: elide;
+                                                            }
+                                                        }
+                                                        Text {
+                                                            text: row.detail;
+                                                            width: 110px;
+                                                            font-size: 11px;
+                                                            color: Theme.text-3;
+                                                            vertical-alignment: center;
+                                                            overflow: elide;
+                                                        }
+                                                        Text {
+                                                            text: row.size;
+                                                            width: 82px;
+                                                            font-size: 12px;
+                                                            color: Theme.text-2;
+                                                            horizontal-alignment: right;
+                                                            vertical-alignment: center;
+                                                        }
+                                                        SmallButton {
+                                                            glyph: "↗";
+                                                            clicked => { root.dup-reveal(row.group, row.file); }
+                                                        }
+                                                        SmallButton {
+                                                            glyph: "⌫";
+                                                            active: row.can-recycle;
+                                                            clicked => { root.dup-recycle(row.group, row.file); }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 7: search
+                                if root.page == 7 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    if !root.has-result: EmptyState {
+                                        width: 100%;
+                                        height: 100%;
+                                        glyph: "⌕";
+                                        title: "Search and filter";
+                                        message: "Search by name, paste a path, filter by category or risk, and find large or old files. Searching uses the in-memory scan result.";
+                                        action-text: "Start a scan";
+                                        action => { root.scan-requested(); }
+                                    }
+
+                                    if root.has-result: VerticalLayout {
+                                        spacing: 9px;
+
+                                        VerticalLayout {
+                                            spacing: 2px;
+                                            Text {
+                                                text: "Search";
+                                                font-size: 19px;
+                                                font-weight: 800;
+                                                color: Theme.text;
+                                            }
+                                            Text {
+                                                text: "Names are matched case-insensitively. A query containing a path separator matches full paths.";
+                                                font-size: 12px;
+                                                color: Theme.text-3;
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            border-radius: Theme.radius;
+                                            background: Theme.panel;
+                                            border-width: 1px;
+                                            border-color: Theme.border;
+
+                                            VerticalLayout {
+                                                padding-left: 12px;
+                                                padding-right: 12px;
+                                                padding-top: 10px;
+                                                padding-bottom: 10px;
+                                                spacing: 8px;
+
+                                                HorizontalLayout {
+                                                    spacing: 6px;
+                                                    search-page-field := LineEdit {
+                                                        horizontal-stretch: 1;
+                                                        text <=> root.search-query;
+                                                        placeholder-text: "File name or full path";
+                                                        accepted(text) => {
+                                                            root.search-query = text;
+                                                            root.search-run();
+                                                        }
+                                                        in property <bool> focus-request: root.search-focus-request;
+                                                        init => {
+                                                            if (focus-request) {
+                                                                self.focus();
+                                                                root.search-focus-request = false;
+                                                            }
+                                                        }
+                                                        changed focus-request => {
+                                                            if (focus-request) {
+                                                                self.focus();
+                                                                root.search-focus-request = false;
+                                                            }
+                                                        }
+                                                    }
+                                                    ActionButton {
+                                                        text: "Search";
+                                                        primary: true;
+                                                        button-width: 84px;
+                                                        clicked => { root.search-run(); }
+                                                    }
+                                                    ActionButton {
+                                                        text: "Reset";
+                                                        button-width: 74px;
+                                                        clicked => { root.search-reset(); }
+                                                    }
+                                                }
+
+                                                HorizontalLayout {
+                                                    spacing: 8px;
+                                                    ComboBox {
+                                                        width: 210px;
+                                                        model: root.category-options;
+                                                        current-index <=> root.search-cat-index;
+                                                    }
+                                                    ComboBox {
+                                                        width: 190px;
+                                                        model: root.risk-options;
+                                                        current-index <=> root.search-risk-index;
+                                                    }
+                                                    ComboBox {
+                                                        width: 150px;
+                                                        model: root.kind-options;
+                                                        current-index <=> root.search-kind-index;
+                                                    }
+                                                    LineEdit {
+                                                        width: 128px;
+                                                        text <=> root.search-min-text;
+                                                        placeholder-text: "Min size (MB)";
+                                                    }
+                                                    LineEdit {
+                                                        width: 140px;
+                                                        text <=> root.search-extension;
+                                                        placeholder-text: "Extension (.zip)";
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            text: root.search-summary;
+                                            font-size: 12px;
+                                            color: Theme.text-2;
+                                        }
+
+                                        ItemTable {
+                                            vertical-stretch: 1;
+                                            rows: root.search-rows;
+                                            compact: false;
+                                            sort-column: root.search-sort-column;
+                                            sort-asc: root.search-sort-asc;
+                                            empty-text: "No items match the current search and filters.";
+                                            select(id, additive) => { root.item-select(id, additive); }
+                                            activate(id) => { root.item-activate(id); }
+                                            context(id, x, y) => { root.item-context(id, x, y); }
+                                            sort(col) => { root.search-sort(col); }
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 8: history
+                                if root.page == 8 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    VerticalLayout {
+                                        spacing: 10px;
+                                        HorizontalLayout {
+                                            spacing: 10px;
+                                            VerticalLayout {
+                                                horizontal-stretch: 1;
+                                                spacing: 2px;
+                                                Text {
+                                                    text: "Scan history";
+                                                    font-size: 19px;
+                                                    font-weight: 800;
+                                                    color: Theme.text;
+                                                }
+                                                Text {
+                                                    text: "Local history only. It stores path, totals and timestamps in the local database.";
+                                                    font-size: 12px;
+                                                    color: Theme.text-3;
+                                                }
+                                            }
+                                            ActionButton {
+                                                text: "Clear history";
+                                                button-width: 110px;
+                                                active: !root.history-empty;
+                                                clicked => { root.history-clear(); }
+                                            }
+                                        }
+
+                                        if root.history-empty: EmptyState {
+                                            horizontal-stretch: 1;
+                                            vertical-stretch: 1;
+                                            glyph: "◷";
+                                            title: "No scans recorded";
+                                            message: "Completed scans are listed here so you can rescan a location quickly.";
+                                        }
+
+                                        if !root.history-empty: Rectangle {
+                                            vertical-stretch: 1;
+                                            border-radius: Theme.radius;
+                                            background: Theme.panel;
+                                            border-width: 1px;
+                                            border-color: Theme.border;
+                                            clip: true;
+
+                                            VerticalLayout {
+                                                spacing: 0px;
+
+                                                Rectangle {
+                                                    height: 30px;
+                                                    background: Theme.panel-2;
+                                                    HorizontalLayout {
+                                                        padding-left: 12px;
+                                                        padding-right: 12px;
+                                                        spacing: 8px;
+                                                        Text { text: "When"; width: 118px; font-size: 12px; font-weight: 600; color: Theme.text-3; vertical-alignment: center; }
+                                                        Text { text: "Location"; horizontal-stretch: 1; font-size: 12px; font-weight: 600; color: Theme.text-3; vertical-alignment: center; }
+                                                        Text { text: "Size"; width: 86px; font-size: 12px; font-weight: 600; color: Theme.text-3; horizontal-alignment: right; vertical-alignment: center; }
+                                                        Text { text: "Files"; width: 72px; font-size: 12px; font-weight: 600; color: Theme.text-3; horizontal-alignment: right; vertical-alignment: center; }
+                                                        Text { text: "Status"; width: 94px; font-size: 12px; font-weight: 600; color: Theme.text-3; vertical-alignment: center; }
+                                                        Text { text: ""; width: 84px; }
+                                                    }
+                                                }
+                                                Rectangle { height: 1px; background: Theme.border; }
+
+                                                ListView {
+                                                    for row[i] in root.history-rows: Rectangle {
+                                                        width: 100%;
+                                                        height: 38px;
+                                                        background: Math.mod(i, 2) == 0 ? transparent : (Theme.dark ? #0d1626 : #fafcff);
+                                                        HorizontalLayout {
+                                                            padding-left: 12px;
+                                                            padding-right: 12px;
+                                                            spacing: 8px;
+                                                            Text { text: row.when; width: 118px; font-size: 12px; color: Theme.text-2; vertical-alignment: center; overflow: elide; }
+                                                            Text { text: row.path; horizontal-stretch: 1; font-size: 12px; color: Theme.text; vertical-alignment: center; overflow: elide; }
+                                                            Text { text: row.size; width: 86px; font-size: 12px; color: Theme.text-2; horizontal-alignment: right; vertical-alignment: center; }
+                                                            Text { text: row.files; width: 72px; font-size: 12px; color: Theme.text-3; horizontal-alignment: right; vertical-alignment: center; }
+                                                            Text { text: row.status; width: 94px; font-size: 12px; color: Theme.text-3; vertical-alignment: center; overflow: elide; }
+                                                            ActionButton {
+                                                                text: "Rescan";
+                                                                button-width: 78px;
+                                                                clicked => { root.history-rescan(row.id); }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ------------------------------------ page 9: settings
+                                if root.page == 9 && !root.scanning: Rectangle {
+                                    width: 100%;
+                                    height: 100%;
+
+                                    ScrollView {
+                                        width: 100%;
+                                        height: 100%;
+
+                                        VerticalLayout {
+                                            width: parent.width;
+                                            padding-left: 16px;
+                                            padding-right: 16px;
+                                            padding-top: 0px;
+                                            padding-bottom: 24px;
+                                            spacing: 10px;
+
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                VerticalLayout {
+                                                    horizontal-stretch: 1;
+                                                    spacing: 2px;
+                                                    Text {
+                                                        text: "Settings";
+                                                        font-size: 19px;
+                                                        font-weight: 800;
+                                                        color: Theme.text;
+                                                    }
+                                                    Text {
+                                                        text: "Preferences are stored locally in a SQLite database. Nothing is sent over the network.";
+                                                        font-size: 12px;
+                                                        color: Theme.text-3;
+                                                    }
+                                                }
+                                                ActionButton {
+                                                    text: "Save settings";
+                                                    primary: true;
+                                                    button-width: 120px;
+                                                    clicked => { root.settings-save(); }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                border-radius: Theme.radius;
+                                                background: Theme.panel;
+                                                border-width: 1px;
+                                                border-color: Theme.border;
+                                                VerticalLayout {
+                                                    padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                    spacing: 0px;
+                                                    SectionTitle { title: "Appearance"; subtitle: ""; }
+                                                    ToggleRow {
+                                                        label: "Dark theme";
+                                                        description: "Switch between the dark and light palettes.";
+                                                        checked <=> root.settings-dark;
+                                                    }
+                                                    ToggleRow {
+                                                        label: "Show details panel";
+                                                        description: "Keep the right-hand information panel available.";
+                                                        checked <=> root.show-info;
+                                                    }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                border-radius: Theme.radius;
+                                                background: Theme.panel;
+                                                border-width: 1px;
+                                                border-color: Theme.border;
+                                                VerticalLayout {
+                                                    padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                    spacing: 6px;
+                                                    SectionTitle { title: "Scanning"; subtitle: ""; }
+                                                    ToggleRow {
+                                                        label: "Low resource mode";
+                                                        description: "Use fewer worker threads and less memory during a scan.";
+                                                        checked <=> root.settings-low-resource;
+                                                    }
+                                                    ToggleRow {
+                                                        label: "Follow reparse points";
+                                                        description: "Junctions and symbolic links are not followed by default. Enabling this increases scan time and may require privileges.";
+                                                        checked <=> root.settings-follow-reparse;
+                                                    }
+                                                    HorizontalLayout {
+                                                        spacing: 10px;
+                                                        Text {
+                                                            text: "Worker threads (0 = automatic)";
+                                                            horizontal-stretch: 1;
+                                                            font-size: 13px;
+                                                            color: Theme.text;
+                                                            vertical-alignment: center;
+                                                        }
+                                                        LineEdit {
+                                                            width: 110px;
+                                                            text <=> root.settings-workers-text;
+                                                            placeholder-text: "0";
+                                                        }
+                                                    }
+                                                    Text {
+                                                        text: "Excluded folders (one path per line)";
+                                                        font-size: 13px;
+                                                        color: Theme.text;
+                                                    }
+                                                    TextEdit {
+                                                        height: 104px;
+                                                        text <=> root.settings-exclusions-text;
+                                                        placeholder-text: "C:\\Users\\Me\\AppData\\Local\\BigCache";
+                                                    }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                border-radius: Theme.radius;
+                                                background: Theme.panel;
+                                                border-width: 1px;
+                                                border-color: Theme.border;
+                                                VerticalLayout {
+                                                    padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                    spacing: 0px;
+                                                    SectionTitle { title: "Safety"; subtitle: ""; }
+                                                    ToggleRow {
+                                                        label: "Prefer the Recycle Bin";
+                                                        description: "When on, deletion moves items to the Recycle Bin instead of erasing them.";
+                                                        checked <=> root.settings-use-recycle;
+                                                    }
+                                                    ToggleRow {
+                                                        label: "Confirm destructive actions";
+                                                        description: "Always show a confirmation dialog before deleting or replacing items.";
+                                                        checked <=> root.settings-confirm-destructive;
+                                                    }
+                                                    ToggleRow {
+                                                        label: "Remember last location";
+                                                        description: "Restore the last scanned path when SmartDisk starts.";
+                                                        checked <=> root.settings-remember-location;
+                                                    }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                border-radius: Theme.radius;
+                                                background: Theme.panel;
+                                                border-width: 1px;
+                                                border-color: Theme.border;
+                                                VerticalLayout {
+                                                    padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                    spacing: 6px;
+                                                    SectionTitle { title: "Duplicates"; subtitle: ""; }
+                                                    HorizontalLayout {
+                                                        spacing: 10px;
+                                                        Text {
+                                                            text: "Minimum file size for hashing (MB)";
+                                                            horizontal-stretch: 1;
+                                                            font-size: 13px;
+                                                            color: Theme.text;
+                                                            vertical-alignment: center;
+                                                        }
+                                                        LineEdit {
+                                                            width: 110px;
+                                                            text <=> root.settings-min-dup-text;
+                                                            placeholder-text: "1";
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                border-radius: Theme.radius;
+                                                background: Theme.panel;
+                                                border-width: 1px;
+                                                border-color: Theme.border;
+                                                VerticalLayout {
+                                                    padding-left: 14px;
+padding-right: 14px;
+padding-top: 12px;
+padding-bottom: 12px;
+                                                    spacing: 6px;
+                                                    SectionTitle { title: "Local data"; subtitle: root.db-path; }
+                                                    Text {
+                                                        text: "Database size: " + root.db-size;
+                                                        font-size: 12px;
+                                                        color: Theme.text-2;
+                                                    }
+                                                    HorizontalLayout {
+                                                        spacing: 8px;
+                                                        ActionButton {
+                                                            text: "Open data folder";
+                                                            button-width: 126px;
+                                                            clicked => { root.open-data-folder(); }
+                                                        }
+                                                        ActionButton {
+                                                            text: "Clear history";
+                                                            button-width: 110px;
+                                                            clicked => { root.history-clear(); }
+                                                        }
+                                                        ActionButton {
+                                                            text: "Clear scan data";
+                                                            button-width: 126px;
+                                                            clicked => { root.clear-scan-data(); }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                border-radius: Theme.radius;
+                                                background: Theme.panel;
+                                                border-width: 1px;
+                                                border-color: Theme.border;
+                                                VerticalLayout {
+                                                    padding: 14px;
+                                                    spacing: 4px;
+                                                    Text {
+                                                        text: "About SmartDisk";
+                                                        font-size: 14px;
+                                                        font-weight: 700;
+                                                        color: Theme.text;
+                                                    }
+                                                    Text {
+                                                        text: "SmartDisk " + root.app-version + " · Native Windows disk space analyzer built with Rust and Slint.";
+                                                        font-size: 12px;
+                                                        color: Theme.text-2;
+                                                        wrap: word-wrap;
+                                                    }
+                                                    Text {
+                                                        text: "Core functionality is fully offline. SmartDisk does not collect telemetry and does not upload file names or contents. Classification and deletion-risk assessments are local, rule-based estimates — not guarantees.";
+                                                        font-size: 12px;
+                                                        color: Theme.text-3;
+                                                        wrap: word-wrap;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ------------------------------------ info panel
+                            if root.info-panel-open && root.show-info && !root.scanning: Rectangle {
+                                width: 326px;
+                                vertical-stretch: 1;
+                                border-radius: Theme.radius;
+                                background: Theme.panel;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                clip: true;
+
+                                VerticalLayout {
+                                    spacing: 0px;
+
+                                    Rectangle {
+                                        height: 38px;
+                                        background: Theme.panel-2;
+                                        HorizontalLayout {
+                                            padding-left: 12px;
+                                            padding-right: 6px;
+                                            Text {
+                                                text: "Details";
+                                                horizontal-stretch: 1;
+                                                font-size: 13px;
+                                                font-weight: 700;
+                                                color: Theme.text;
+                                                vertical-alignment: center;
+                                            }
+                                            SmallButton {
+                                                glyph: "×";
+                                                clicked => { root.info-panel-open = false; }
+                                            }
+                                        }
+                                    }
+                                    Rectangle { height: 1px; background: Theme.border; }
+
+                                    if !root.info-visible: Text {
+                                        text: "Select a file or folder to inspect its size, classification and deletion-risk assessment.";
+                                        font-size: 12px;
+                                        color: Theme.text-3;
+                                        wrap: word-wrap;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                        width: 100%;
+                                        height: 100%;
+                                    }
+
+                                    if root.info-visible: ScrollView {
+                                        width: 100%;
+                                        height: 100%;
+                                        VerticalLayout {
+                                            width: parent.width;
+                                            padding: 12px;
+                                            spacing: 8px;
+
+                                            Text {
+                                                text: root.info-name;
+                                                font-size: 15px;
+                                                font-weight: 800;
+                                                color: Theme.text;
+                                                wrap: word-wrap;
+                                            }
+                                            Text {
+                                                text: root.info-path;
+                                                font-size: 11px;
+                                                color: Theme.text-3;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: 5px;
+                                                Rectangle {
+                                                    height: 20px;
+                                                    border-radius: 10px;
+                                                    background: Theme.panel-2;
+                                                    width: 96px;
+                                                    Text { text: root.info-kind; font-size: 11px; color: Theme.text-2; horizontal-alignment: center; vertical-alignment: center; width: 96px; height: 20px; }
+                                                }
+                                                Rectangle {
+                                                    height: 20px;
+                                                    border-radius: 10px;
+                                                    background: Theme.panel-2;
+                                                    width: 92px;
+                                                    Text { text: root.info-size; font-size: 11px; color: Theme.text-2; horizontal-alignment: center; vertical-alignment: center; width: 92px; height: 20px; }
+                                                }
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: 5px;
+                                                Rectangle {
+                                                    height: 21px;
+                                                    border-radius: 10px;
+                                                    background: Theme.panel-2;
+                                                    width: 136px;
+                                                    Text { text: root.info-category; font-size: 11px; color: root.info-category-color; horizontal-alignment: center; vertical-alignment: center; width: 136px; height: 21px; overflow: elide; }
+                                                }
+                                                Rectangle {
+                                                    height: 21px;
+                                                    border-radius: 10px;
+                                                    background: Theme.panel-2;
+                                                    width: 78px;
+                                                    Text { text: root.info-confidence; font-size: 11px; color: Theme.text-3; horizontal-alignment: center; vertical-alignment: center; width: 78px; height: 21px; }
+                                                }
+                                                Rectangle {
+                                                    height: 21px;
+                                                    border-radius: 10px;
+                                                    background: Theme.danger-soft;
+                                                    width: 100px;
+                                                    Text { text: root.info-risk; font-size: 11px; color: root.info-risk-color; horizontal-alignment: center; vertical-alignment: center; width: 100px; height: 21px; overflow: elide; }
+                                                }
+                                            }
+
+                                            Text {
+                                                text: root.info-modified;
+                                                font-size: 11px;
+                                                color: Theme.text-3;
+                                            }
+
+                                            Rectangle { height: 1px; background: Theme.border; }
+
+                                            Text {
+                                                text: "ASSESSMENT";
+                                                font-size: 11px;
+                                                font-weight: 700;
+                                                color: Theme.text-3;
+                                                letter-spacing: 1px;
+                                            }
+                                            Text {
+                                                text: root.info-summary;
+                                                font-size: 12px;
+                                                font-weight: 600;
+                                                color: Theme.text;
+                                                wrap: word-wrap;
+                                            }
+                                            Text {
+                                                text: root.info-consequences;
+                                                font-size: 12px;
+                                                color: Theme.text-2;
+                                                wrap: word-wrap;
+                                            }
+
+                                            if root.info-recommendation != "": Text {
+                                                text: root.info-recommendation;
+                                                font-size: 12px;
+                                                color: Theme.text-2;
+                                                wrap: word-wrap;
+                                            }
+
+                                            if root.info-missing != "": Rectangle {
+                                                border-radius: Theme.radius-sm;
+                                                background: Theme.panel-2;
+                                                VerticalLayout {
+                                                    padding: 8px;
+                                                    Text {
+                                                        text: "Limitations";
+                                                        font-size: 11px;
+                                                        font-weight: 700;
+                                                        color: Theme.text-3;
+                                                    }
+                                                    Text {
+                                                        text: root.info-missing;
+                                                        font-size: 11px;
+                                                        color: Theme.text-3;
+                                                        wrap: word-wrap;
+                                                    }
+                                                }
+                                            }
+
+                                            Text {
+                                                text: "EVIDENCE";
+                                                font-size: 11px;
+                                                font-weight: 700;
+                                                color: Theme.text-3;
+                                                letter-spacing: 1px;
+                                            }
+                                            for ev in root.info-evidence: HorizontalLayout {
+                                                spacing: 5px;
+                                                Text { text: "•"; width: 8px; font-size: 12px; color: Theme.text-3; }
+                                                Text { text: ev.text; horizontal-stretch: 1; font-size: 11px; color: Theme.text-3; wrap: word-wrap; }
+                                            }
+
+                                            Rectangle { height: 4px; }
+
+                                            ActionButton {
+                                                text: "Open";
+                                                primary: true;
+                                                button-width: 300px;
+                                                active: root.info-actions-enabled && root.info-node >= 0;
+                                                clicked => { root.open-selected(); }
+                                            }
+                                            ActionButton {
+                                                text: "Show in Explorer";
+                                                button-width: 300px;
+                                                active: root.info-actions-enabled && root.info-node >= 0;
+                                                clicked => { root.reveal-selected(); }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 5px;
+                                                ActionButton {
+                                                    text: "Rename";
+                                                    button-width: 147px;
+                                                    active: root.info-actions-enabled && root.info-node >= 0;
+                                                    clicked => { root.rename-selected(); }
+                                                }
+                                                ActionButton {
+                                                    text: "Copy";
+                                                    button-width: 147px;
+                                                    active: root.info-actions-enabled && root.info-node >= 0;
+                                                    clicked => { root.copy-selected(); }
+                                                }
+                                            }
+                                            ActionButton {
+                                                text: "Move to Recycle Bin";
+                                                button-width: 300px;
+                                                active: root.info-actions-enabled && root.info-node >= 0;
+                                                clicked => { root.recycle-selected(); }
+                                            }
+                                            ActionButton {
+                                                text: "Delete permanently…";
+                                                danger: true;
+                                                button-width: 300px;
+                                                active: root.info-actions-enabled && root.info-node >= 0;
+                                                clicked => { root.delete-selected(); }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 100%;
+                height: Theme.status-height;
+                background: Theme.panel;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 10px;
+                    spacing: 12px;
+                    Text {
+                        text: root.status-left;
+                        font-size: 12px;
+                        color: Theme.text-2;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: root.status-middle;
+                        horizontal-stretch: 1;
+                        font-size: 12px;
+                        color: Theme.text-3;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: root.status-right;
+                        font-size: 12px;
+                        color: Theme.text-3;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+
+        // ============================================================ overlays
+
+        // context menu
+        if root.context-visible: Rectangle {
+            width: 100%;
+            height: 100%;
+            background: #00000001;
+            z: 40;
+
+            TouchArea {
+                clicked => { root.context-close(); }
+                pointer-event(ev) => {
+                    if (ev.kind == PointerEventKind.up && ev.button == PointerEventButton.right) {
+                        root.context-close();
+                    }
+                }
+            }
+
+            Rectangle {
+                x: min(root.context-x * 1px, root.width - 238px);
+                y: min(root.context-y * 1px, root.height - root.context-height - 10px);
+                width: 228px;
+                height: root.context-height;
+                border-radius: Theme.radius;
+                background: Theme.panel;
+                border-width: 1px;
+                border-color: Theme.border-strong;
+
+                VerticalLayout {
+                    padding: 4px;
+                    spacing: 1px;
+
+                    if root.context-title != "": Text {
+                        text: root.context-title;
+                        height: 24px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: Theme.text-3;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    if root.context-subtitle != "": Text {
+                        text: root.context-subtitle;
+                        height: 16px;
+                        font-size: 11px;
+                        color: Theme.text-3;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+
+                    for action in root.context-actions: Rectangle {
+                        height: action.separator-before ? 31px : 29px;
+                        background: transparent;
+
+                        Rectangle {
+                            visible: action.separator-before;
+                            y: 0px;
+                            width: 100%;
+                            height: 1px;
+                            background: Theme.border;
+                        }
+
+                        Rectangle {
+                            y: action.separator-before ? 3px : 0px;
+                            width: 100%;
+                            height: action.separator-before ? 28px : 29px;
+                            border-radius: Theme.radius-sm;
+                            background: action-ta.has-hover && action.enabled ? Theme.hover : transparent;
+                            opacity: action.enabled ? 1.0 : 0.42;
+
+                            Text {
+                                x: 9px;
+                                width: parent.width - 18px;
+                                height: parent.height;
+                                text: action.label;
+                                font-size: 12px;
+                                color: action.destructive ? Theme.danger : Theme.text;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+
+                            action-ta := TouchArea {
+                                enabled: action.enabled;
+                                mouse-cursor: pointer;
+                                clicked => { root.context-action(action.id); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // modal dialog
+        if root.dialog-visible: Rectangle {
+            width: 100%;
+            height: 100%;
+            background: #00000078;
+            // Confirmation dialogs must sit above the cleanup preview (z 65).
+            z: 70;
+
+            TouchArea {
+                clicked => { root.dialog-cancelled(); }
+            }
+
+            Rectangle {
+                width: min(500px, root.width - 60px);
+                height: dialog-content.preferred-height + 28px;
+                x: (root.width - self.width) / 2;
+                y: (root.height - self.height) / 2;
+                border-radius: 14px;
+                background: Theme.panel;
+                border-width: 1px;
+                border-color: Theme.border-strong;
+
+                dialog-content := VerticalLayout {
+                    padding: 20px;
+                    spacing: 10px;
+
+                    Text {
+                        text: root.dialog-title;
+                        font-size: 17px;
+                        font-weight: 800;
+                        color: Theme.text;
+                        wrap: word-wrap;
+                    }
+                    Text {
+                        text: root.dialog-message;
+                        font-size: 13px;
+                        color: Theme.text-2;
+                        wrap: word-wrap;
+                    }
+                    if root.dialog-input: VerticalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: root.dialog-input-label;
+                            font-size: 12px;
+                            color: Theme.text-3;
+                        }
+                        LineEdit {
+                            text <=> root.dialog-input-text;
+                            accepted(text) => {
+                                root.dialog-input-text = text;
+                                root.dialog-accepted(text);
+                            }
+                        }
+                    }
+                    Rectangle { height: 4px; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: end;
+                        ActionButton {
+                            text: root.dialog-secondary;
+                            button-width: 96px;
+                            clicked => { root.dialog-cancelled(); }
+                        }
+                        ActionButton {
+                            text: root.dialog-primary;
+                            primary: !root.dialog-danger;
+                            danger: root.dialog-danger;
+                            button-width: 190px;
+                            clicked => { root.dialog-accepted(root.dialog-input-text); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // cleanup plan preview
+        if root.plan-visible: Rectangle {
+            width: 100%;
+            height: 100%;
+            background: #00000078;
+            z: 65;
+
+            TouchArea {
+                clicked => { root.cleanup-close-plan(); }
+            }
+
+            Rectangle {
+                width: min(780px, root.width - 60px);
+                // Fit the height to the content. A fixed height let the list
+                // overflow the panel and pushed the footer buttons outside the
+                // dialog's hit area, so they could not be clicked.
+                height: min(plan-content.preferred-height, root.height - 60px);
+                x: (root.width - self.width) / 2;
+                y: (root.height - self.height) / 2;
+                border-radius: 14px;
+                background: Theme.panel;
+                border-width: 1px;
+                border-color: Theme.border-strong;
+
+                plan-content := VerticalLayout {
+                    padding: 18px;
+                    spacing: 9px;
+
+                    HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 1px;
+                            Text {
+                                text: "Cleanup preview";
+                                font-size: 18px;
+                                font-weight: 800;
+                                color: Theme.text;
+                            }
+                            Text {
+                                text: root.plan-count-text;
+                                font-size: 12px;
+                                color: Theme.text-3;
+                            }
+                        }
+                        Text {
+                            text: root.plan-total;
+                            font-size: 21px;
+                            font-weight: 800;
+                            color: Theme.accent;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    Text {
+                        text: root.plan-summary;
+                        font-size: 12px;
+                        color: Theme.text-2;
+                        wrap: word-wrap;
+                    }
+
+                    if root.plan-warning != "": Rectangle {
+                        border-radius: Theme.radius-sm;
+                        background: Theme.panel-2;
+                        border-width: 1px;
+                        border-color: Theme.warning;
+                        VerticalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            padding-top: 8px;
+                            padding-bottom: 8px;
+                            Text {
+                                text: root.plan-warning;
+                                font-size: 12px;
+                                color: Theme.text-2;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        // A bounded list keeps the dialog's preferred height
+                        // predictable on every window size.
+                        height: Math.min(380px, root.height - 330px);
+                        border-radius: Theme.radius-sm;
+                        background: Theme.panel-2;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        clip: true;
+
+                        VerticalLayout {
+                            spacing: 0px;
+                            Rectangle {
+                                height: 27px;
+                                background: Theme.panel-3;
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 10px;
+                                    Text { text: "Item"; horizontal-stretch: 1; font-size: 11px; font-weight: 600; color: Theme.text-3; vertical-alignment: center; }
+                                    Text { text: "Risk"; width: 90px; font-size: 11px; font-weight: 600; color: Theme.text-3; vertical-alignment: center; }
+                                    Text { text: "Size"; width: 82px; font-size: 11px; font-weight: 600; color: Theme.text-3; horizontal-alignment: right; vertical-alignment: center; }
+                                }
+                            }
+                            ListView {
+                                for row[i] in root.plan-rows: Rectangle {
+                                    width: 100%;
+                                    height: 32px;
+                                    background: Math.mod(i, 2) == 0 ? transparent : (Theme.dark ? #0d1626 : #ffffff);
+                                    HorizontalLayout {
+                                        padding-left: 10px;
+                                        padding-right: 10px;
+                                        spacing: 4px;
+                                        VerticalLayout {
+                                            horizontal-stretch: 1;
+                                            alignment: center;
+                                            spacing: 0px;
+                                            Text { text: row.name; font-size: 12px; color: Theme.text; overflow: elide; }
+                                            Text { text: row.path; font-size: 11px; color: Theme.text-3; overflow: elide; }
+                                        }
+                                        Text { text: row.risk; width: 90px; font-size: 11px; color: row.risk-color; vertical-alignment: center; overflow: elide; }
+                                        Text { text: row.size; width: 82px; font-size: 12px; color: Theme.text-2; horizontal-alignment: right; vertical-alignment: center; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        // A plain TouchArea rather than CheckBox: the toggle must
+                        // stay clickable above the dialog-scrim TouchArea that
+                        // closes the preview when the empty margin is clicked.
+                        Rectangle {
+                            width: 290px;
+                            height: 24px;
+                            background: transparent;
+                            plan-recycle-ta := TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => {
+                                    root.plan-recycle = !root.plan-recycle;
+                                    root.plan-recycle-toggled(root.plan-recycle);
+                                }
+                            }
+                            Rectangle {
+                                x: 0px;
+                                y: 4px;
+                                width: 16px;
+                                height: 16px;
+                                border-radius: 4px;
+                                background: root.plan-recycle ? Theme.accent : transparent;
+                                border-width: 1px;
+                                border-color: root.plan-recycle ? Theme.accent : Theme.border-strong;
+                                Text {
+                                    visible: root.plan-recycle;
+                                    text: "✓";
+                                    width: 100%;
+                                    height: 100%;
+                                    color: #ffffff;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                            Text {
+                                x: 24px;
+                                width: parent.width - 24px;
+                                height: 100%;
+                                text: "Move to Recycle Bin (recommended)";
+                                font-size: 13px;
+                                color: Theme.text;
+                                vertical-alignment: center;
+                            }
+                        }
+                        Rectangle { horizontal-stretch: 1; background: transparent; }
+                        ActionButton {
+                            text: "Cancel";
+                            button-width: 88px;
+                            clicked => { root.cleanup-close-plan(); }
+                        }
+                        ActionButton {
+                            text: root.plan-confirm-label;
+                            danger: !root.plan-recycle;
+                            primary: root.plan-recycle;
+                            button-width: 170px;
+                            clicked => { root.cleanup-confirm-plan(); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // toast
+        if root.toast-visible: Rectangle {
+            x: root.width - self.width - 22px;
+            y: root.height - Theme.status-height - self.height - 16px;
+            width: 386px;
+            height: toast-content.preferred-height + 20px;
+            z: 70;
+            border-radius: Theme.radius;
+            background: Theme.panel;
+            border-width: 1px;
+            border-color: root.toast-error ? Theme.danger : Theme.border-strong;
+
+            Rectangle {
+                x: 0px;
+                y: 0px;
+                width: 4px;
+                height: parent.height;
+                border-radius: Theme.radius;
+                background: root.toast-error ? Theme.danger : Theme.success;
+            }
+
+            toast-content := HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 10px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                spacing: 8px;
+                Text {
+                    text: root.toast-text;
+                    horizontal-stretch: 1;
+                    font-size: 12px;
+                    color: Theme.text;
+                    wrap: word-wrap;
+                    vertical-alignment: center;
+                }
+                SmallButton {
+                    glyph: "×";
+                    clicked => { root.toast-dismiss(); }
+                }
+            }
+        }
+
+        // Keyboard shortcuts live on the outer focus scope so they keep
+        // working while a text field or another panel has focus.
+        KeyBinding {
+            keys: @keys(F5);
+            activated => { root.rescan-requested(); }
+        }
+        KeyBinding {
+            keys: @keys(Control + F);
+            activated => {
+                root.page = 7;
+                root.search-focus-request = true;
+            }
+        }
+        KeyBinding {
+            keys: @keys(Control + C);
+            activated => { root.copy-selected(); }
+        }
+        KeyBinding {
+            keys: @keys(Control + X);
+            activated => { root.cut-selected(); }
+        }
+        KeyBinding {
+            keys: @keys(Control + V);
+            activated => { root.paste-into-current(); }
+        }
+        KeyBinding {
+            keys: @keys(F2);
+            activated => { root.rename-selected(); }
+        }
+        // Delete is reversible: it goes to the Recycle Bin. Permanent deletion
+        // is a separate, explicitly confirmed action on Shift+Delete or in the
+        // context menu.
+        KeyBinding {
+            keys: @keys(Delete);
+            activated => { root.recycle-selected(); }
+        }
+        KeyBinding {
+            keys: @keys(Shift + Delete);
+            activated => { root.delete-selected(); }
+        }
+        KeyBinding {
+            keys: @keys(Escape);
+            activated => {
+                if root.dialog-visible {
+                    root.dialog-cancelled();
+                } else if root.plan-visible {
+                    root.cleanup-close-plan();
+                } else if root.context-visible {
+                    root.context-close();
+                } else {
+                    root.escape-pressed();
+                }
+            }
+        }
+    }
+}

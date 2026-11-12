@@ -1,0 +1,127 @@
+// Data structures shared between the Rust controller and the Slint views.
+
+export struct DriveOption {
+    label: string,
+    root: string,
+}
+
+export struct TreeRow {
+    id: int,
+    depth: int,
+    name: string,
+    size: string,
+    is-dir: bool,
+    expanded: bool,
+    has-children: bool,
+    selected: bool,
+    color: color,
+}
+
+export struct ItemRow {
+    id: int,
+    name: string,
+    path: string,
+    type-label: string,
+    size: string,
+    allocated: string,
+    modified: string,
+    category: string,
+    category-color: color,
+    risk: string,
+    risk-color: color,
+    is-dir: bool,
+    selected: bool,
+}
+
+export struct CategoryRow {
+    key: string,
+    name: string,
+    size: string,
+    percent: float,
+    color: color,
+    count: string,
+}
+
+export struct TopRow {
+    id: int,
+    name: string,
+    size: string,
+    percent: float,
+    color: color,
+    is-dir: bool,
+}
+
+export struct ExtensionRow {
+    extension: string,
+    count: string,
+    size: string,
+}
+
+export struct TreemapCell {
+    id: int,
+    name: string,
+    size: string,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    color: color,
+    is-dir: bool,
+    selected: bool,
+}
+
+export struct CrumbRow {
+    id: int,
+    name: string,
+}
+
+export struct GroupRow {
+    key: string,
+    title: string,
+    description: string,
+    size: string,
+    count: string,
+    color: color,
+    selected: bool,
+}
+
+export struct PlanRow {
+    name: string,
+    path: string,
+    size: string,
+    risk: string,
+    risk-color: color,
+}
+
+export struct DuplicateRow {
+    group: int,
+    file: int,
+    is-header: bool,
+    name: string,
+    path: string,
+    size: string,
+    detail: string,
+    can-recycle: bool,
+    selected: bool,
+}
+
+export struct HistoryRow {
+    id: int,
+    path: string,
+    when: string,
+    size: string,
+    files: string,
+    status: string,
+}
+
+export struct ContextAction {
+    id: int,
+    label: string,
+    enabled: bool,
+    destructive: bool,
+    separator-before: bool,
+}
+
+export struct EvidenceRow {
+    text: string,
+}

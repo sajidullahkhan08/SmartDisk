@@ -1,0 +1,401 @@
+import { Theme } from "theme.slint";
+import { CheckBox } from "std-widgets.slint";
+
+export component ActionButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary: false;
+    in property <bool> danger: false;
+    in property <bool> active: true;
+    in property <length> button-width: 100px;
+    callback clicked();
+
+    width: button-width;
+    height: 34px;
+    border-radius: Theme.radius-sm;
+    border-width: primary || danger ? 0px : 1px;
+    border-color: Theme.border;
+    opacity: active ? 1.0 : 0.52;
+    background: !active ? Theme.panel-3
+        : primary ? (ta.has-hover ? #5390f8 : Theme.accent)
+        : danger ? (ta.has-hover ? #f45b5b : Theme.danger)
+        : ta.has-hover ? Theme.hover : Theme.panel-2;
+
+    Text {
+        text: root.text;
+        color: root.primary || root.danger ? #ffffff : Theme.text;
+        font-size: 14px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+        x: 8px;
+        width: root.width - 16px;
+        height: root.height;
+    }
+
+    ta := TouchArea {
+        enabled: root.active;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component SmallButton inherits Rectangle {
+    in property <string> glyph;
+    in property <bool> active: true;
+    in property <bool> selected: false;
+    callback clicked();
+
+    width: 32px;
+    height: 32px;
+    border-radius: Theme.radius-sm;
+    border-width: 1px;
+    border-color: Theme.border;
+    opacity: active ? 1.0 : 0.5;
+    background: selected ? Theme.selected : ta.has-hover ? Theme.hover : Theme.panel-2;
+
+    Text {
+        text: root.glyph;
+        color: Theme.text;
+        font-size: 14px;
+        font-family: "Segoe UI Symbol";
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        width: root.width;
+        height: root.height;
+    }
+
+    ta := TouchArea {
+        enabled: root.active;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <string> glyph;
+    in property <bool> selected: false;
+    callback clicked();
+
+    height: 38px;
+    border-radius: Theme.radius-sm;
+    background: root.selected ? Theme.selected : ta.has-hover ? Theme.hover : transparent;
+
+    Rectangle {
+        x: 0px;
+        y: 9px;
+        width: 3px;
+        height: root.height - 18px;
+        border-radius: 1.5px;
+        background: Theme.accent;
+        visible: root.selected;
+    }
+
+    HorizontalLayout {
+        x: 14px;
+        width: root.width - 20px;
+        height: root.height;
+        spacing: 11px;
+
+        Text {
+            text: root.glyph;
+            width: 18px;
+            font-size: 14px;
+            font-family: "Segoe UI Symbol";
+            color: root.selected ? Theme.accent : Theme.text-2;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.label;
+            horizontal-stretch: 1;
+            font-size: 14px;
+            font-weight: root.selected ? 600 : 400;
+            color: root.selected ? Theme.text : Theme.text-2;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component StatCard inherits Rectangle {
+    in property <string> label;
+    in property <string> value;
+    in property <string> detail;
+    in property <color> tone: Theme.accent;
+
+    height: 84px;
+    border-radius: Theme.radius;
+    background: Theme.panel;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    VerticalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        padding-top: 13px;
+        padding-bottom: 13px;
+        spacing: 2px;
+
+        Text {
+            text: root.label;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            color: Theme.text-3;
+            overflow: elide;
+        }
+        Text {
+            text: root.value;
+            font-size: 21px;
+            font-weight: 700;
+            color: root.tone;
+            overflow: elide;
+        }
+        Text {
+            text: root.detail;
+            font-size: 12px;
+            color: Theme.text-3;
+            overflow: elide;
+        }
+    }
+}
+
+export component SectionTitle inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+
+    height: subtitle == "" ? 24px : 40px;
+
+    VerticalLayout {
+        spacing: 1px;
+        Text {
+            text: root.title;
+            font-size: 16px;
+            font-weight: 700;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.subtitle;
+            font-size: 12px;
+            color: Theme.text-3;
+            visible: root.subtitle != "";
+        }
+    }
+}
+
+export component BarRow inherits Rectangle {
+    in property <string> name;
+    in property <string> value;
+    in property <float> percent: 0.0;
+    in property <color> bar-color: Theme.accent;
+    callback clicked();
+
+    height: 46px;
+
+    VerticalLayout {
+        spacing: 5px;
+        padding-top: 5px;
+
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: root.name;
+                horizontal-stretch: 1;
+                font-size: 13px;
+                color: Theme.text;
+                overflow: elide;
+            }
+            Text {
+                text: root.value;
+                font-size: 13px;
+                font-weight: 600;
+                color: Theme.text-2;
+            }
+        }
+
+        Rectangle {
+            height: 5px;
+            border-radius: 2.5px;
+            background: Theme.panel-3;
+
+            Rectangle {
+                width: max(3px, min(parent.width, parent.width * root.percent / 100.0));
+                height: parent.height;
+                x: 0px;
+                border-radius: 2.5px;
+                background: root.bar-color;
+            }
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component EmptyState inherits Rectangle {
+    in property <string> glyph: "◌";
+    in property <string> title;
+    in property <string> message;
+    in property <string> action-text: "";
+    callback action();
+
+    background: transparent;
+
+    VerticalLayout {
+        alignment: center;
+        cross-axis-alignment: center;
+        spacing: 10px;
+        padding: 30px;
+
+        Rectangle {
+            width: 84px;
+            height: 84px;
+            border-radius: 42px;
+            background: Theme.panel-2;
+            border-width: 1px;
+            border-color: Theme.border;
+
+            Text {
+                text: root.glyph;
+                font-size: 32px;
+                font-family: "Segoe UI Symbol";
+                color: Theme.text-3;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: 84px;
+                height: 84px;
+            }
+        }
+        Text {
+            text: root.title;
+            font-size: 18px;
+            font-weight: 700;
+            color: Theme.text;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.message;
+            font-size: 13px;
+            color: Theme.text-2;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            width: min(parent.width, 520px);
+        }
+        Rectangle { height: 8px; }
+        ActionButton {
+            text: root.action-text;
+            primary: true;
+            button-width: 220px;
+            visible: root.action-text != "";
+            clicked => { root.action(); }
+        }
+    }
+}
+
+export component ToggleRow inherits Rectangle {
+    in property <string> label;
+    in property <string> description;
+    in-out property <bool> checked: false;
+    callback toggled(bool);
+
+    height: 48px;
+
+    HorizontalLayout {
+        spacing: 12px;
+
+        VerticalLayout {
+            vertical-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+
+            Text {
+                text: root.label;
+                font-size: 14px;
+                color: Theme.text;
+                overflow: elide;
+            }
+            Text {
+                text: root.description;
+                font-size: 12px;
+                color: Theme.text-3;
+                overflow: elide;
+            }
+        }
+
+        CheckBox {
+            checked: root.checked;
+            toggled => {
+                root.checked = self.checked;
+                root.toggled(self.checked);
+            }
+        }
+    }
+}
+
+export component FolderPath inherits Rectangle {
+    in property <string> path;
+
+    height: 30px;
+    background: transparent;
+
+    Text {
+        text: root.path;
+        font-size: 12px;
+        color: Theme.text-3;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+// Single-line text input that draws no background or border of its own,
+// for use inside a unified container such as the header location bar.
+export component PathInput inherits Rectangle {
+    in-out property <string> text: "";
+    in property <string> placeholder: "";
+    out property <bool> focused: input.has-focus;
+    callback accepted(string);
+
+    horizontal-stretch: 1;
+    min-width: 140px;
+    background: transparent;
+
+    // Clicking the padding area around the text focuses the field.
+    TouchArea {
+        clicked => { input.focus(); }
+    }
+
+    Text {
+        text: root.placeholder;
+        visible: root.text == "" && !input.has-focus;
+        color: Theme.text-3;
+        font-size: 13px;
+        vertical-alignment: center;
+        x: 2px;
+        width: parent.width - 4px;
+        height: parent.height;
+        overflow: elide;
+    }
+
+    input := TextInput {
+        text <=> root.text;
+        font-size: 13px;
+        color: Theme.text;
+        selection-background-color: Theme.accent;
+        selection-foreground-color: #ffffff;
+        vertical-alignment: center;
+        x: 2px;
+        width: parent.width - 4px;
+        height: parent.height;
+        accepted => { root.accepted(root.text); }
+    }
+}

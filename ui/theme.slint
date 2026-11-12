@@ -1,0 +1,29 @@
+// Shared visual tokens. The whole application derives its palette from the
+// single `dark` flag so the light and dark themes stay consistent.
+export global Theme {
+    in-out property <bool> dark: true;
+
+    out property <color> bg: dark ? #0a0f1a : #eef2f8;
+    out property <color> panel: dark ? #111a2b : #ffffff;
+    out property <color> panel-2: dark ? #162135 : #f6f8fc;
+    out property <color> panel-3: dark ? #1b2942 : #edf2fa;
+    out property <color> border: dark ? #22304a : #d9e1ed;
+    out property <color> border-strong: dark ? #31456a : #c3d0e2;
+    out property <color> text: dark ? #e7eef8 : #17233b;
+    out property <color> text-2: dark ? #94a5bf : #5d6d86;
+    out property <color> text-3: dark ? #6b7d99 : #8a99ae;
+    out property <color> accent: #3b82f6;
+    out property <color> accent-strong: #2563eb;
+    out property <color> accent-soft: dark ? #1d3a66 : #dbeafe;
+    out property <color> hover: dark ? #1c2c49 : #edf4ff;
+    out property <color> danger: #ef4444;
+    out property <color> danger-soft: dark ? #3d1c24 : #fde8e8;
+    out property <color> warning: #f59e0b;
+    out property <color> success: #10b981;
+    out property <color> selected: dark ? #1e3a5f : #dbeafe;
+    out property <length> radius: 10px;
+    out property <length> radius-sm: 7px;
+    out property <length> sidebar-width: 208px;
+    out property <length> header-height: 64px;
+    out property <length> status-height: 28px;
+}
